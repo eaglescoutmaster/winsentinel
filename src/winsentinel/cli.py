@@ -41,8 +41,53 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("names", nargs="*", help="tool names (default: all)")
     t.add_argument("--config", type=Path)
 
+    a = sub.add_parser("analyze", help="deep static analysis of one file (never executes it)")
+    a.add_argument("file", type=Path)
+    a.add_argument("--llm", action="store_true",
+                   help="opt in: send the evidence dossier (not the file) to the Claude API for a verdict on intent")
+    a.add_argument("--model", default=None, help="Claude model id for --llm")
+    a.add_argument("--config", type=Path)
+
     sub.add_parser("modules", help="list modules")
     return p
+
+
+def _cmd_analyze(args) -> int:
+    import json
+
+    from . import analyze
+
+    cfg = load_config(args.config)
+    if not args.file.is_file():
+        print(f"not a file: {args.file}", file=sys.stderr)
+        return 2
+    try:
+        dossier = analyze.build_dossier(args.file, cfg, Toolchain(cfg.tools_dir))
+    except (OSError, ValueError) as e:
+        print(f"cannot analyse {args.file}: {e}", file=sys.stderr)
+        return 1
+    verdict = None
+    if args.llm:
+        print("--llm: sending the evidence dossier (strings, imports, script text; not the file) to the Claude API")
+        verdict = analyze.llm_verdict(dossier, args.model or analyze.DEFAULT_MODEL)
+    out_dir = cfg.reports_dir / f"analyze-{datetime.now():%Y%m%d-%H%M%S}-{dossier['file']['sha256'][:8]}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "dossier.json").write_text(json.dumps(dossier, indent=1, ensure_ascii=False), "utf-8")
+    if verdict is not None:
+        (out_dir / "verdict.json").write_text(json.dumps(verdict, indent=1, ensure_ascii=False), "utf-8")
+    (out_dir / "analysis.md").write_text(analyze.render_markdown(dossier, verdict), "utf-8")
+    f = dossier["file"]
+    print(f"{f['name']}: {f['kind']}, sha256 {f['sha256']}")
+    print(f"yara matches: {len(dossier['yara'])}, signature: {dossier['authenticode'].get('status')}")
+    if verdict is not None:
+        if "verdict" in verdict:
+            print(f"llm verdict: {verdict['verdict']} (confidence {verdict['confidence']:.2f})")
+        else:
+            print(f"llm verdict not available: {verdict.get('error') or verdict.get('refused')}")
+    else:
+        print("no data left this machine (pass --llm for a Claude API verdict, or have Claude Code read analysis.md)")
+    print(f"analysis: {out_dir / 'analysis.md'}")
+    return 0
 
 
 def _cmd_tools(args) -> int:
@@ -132,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.cmd == "tools":
         return _cmd_tools(args)
+    if args.cmd == "analyze":
+        return _cmd_analyze(args)
     if args.cmd == "modules":
         from .modules import REGISTRY
 

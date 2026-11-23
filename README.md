@@ -49,6 +49,33 @@ uv run winsentinel modules
 Run from an elevated terminal for full coverage. Without admin the scan still completes; every check that was
 skipped is listed under **Coverage** in the report.
 
+### Deep analysis of one file
+
+```powershell
+uv run winsentinel analyze C:\path\to\suspicious.exe          # static dossier, nothing leaves the machine
+uv run winsentinel analyze C:\path\to\suspicious.exe --llm    # also ask the Claude API what the file is for
+```
+
+`analyze` never executes the file. It writes `reports\analyze-<timestamp>-<hash>\` with:
+
+| File | Content |
+|---|---|
+| `dossier.json` | Hashes, Authenticode, YARA matches, PE sections/imports/version info, capabilities implied by imports, interesting strings, Rust crates / Go modules it was built from, decoded script layers, indicators |
+| `analysis.md` | Readable summary, plus the review rules an LLM (or a person) should apply to the dossier |
+| `verdict.json` | Only with `--llm`: verdict, confidence, likely intent, evidence for and against, unknowns, manual next steps |
+
+Two ways to get reasoning about intent:
+
+- **Claude Code session.** Run `analyze` without `--llm` and ask Claude Code to read `analysis.md` and
+  `dossier.json`. No API key needed.
+- **`--llm`.** Sends the dossier to the Claude API (`claude-opus-5-5` by default, `--model` to change). Needs
+  `ANTHROPIC_API_KEY` or an `ant auth login` profile. Without credentials the dossier is still written and the
+  verdict is reported as not available.
+
+The verdict is a language model's opinion of static evidence. It can be wrong in both directions, it never
+changes scan findings, and strings inside a sample can be written to mislead it (the prompt treats the dossier
+as untrusted data, which reduces that risk but does not remove it).
+
 ### Output
 
 `reports\<timestamp>\` contains:
@@ -112,7 +139,9 @@ trusted_signers = ['Microsoft Corporation', 'Microsoft Windows']
 
 ## Privacy and network use
 
-- No file contents or personal data leave the machine.
+- No file contents or personal data leave the machine, with one opt-in exception: `analyze --llm` sends the
+  evidence dossier for that one file (strings, import names, script text, hashes; never the file itself) to the
+  Claude API. Your profile path and user name are replaced before sending. Without `--llm` nothing is sent.
 - TruffleHog always runs with `--no-verification`, so found credentials are never sent to a provider.
 - Secret values are never written to reports: type, location and at most the first 4 characters.
 - Network is used only for: tool/rule/signature downloads (`tools install`, Semgrep rule packs, Trivy DB),
