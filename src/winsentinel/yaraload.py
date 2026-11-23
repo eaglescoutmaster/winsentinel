@@ -14,7 +14,7 @@ import yara
 
 _RULE_START = re.compile(r"^(?:(?:private|global)\s+)*rule\s+(\w+)", re.M)
 _UNSUPPORTED = re.compile(r"pe\.(?:number_of_signatures|signatures|is_signed)|\bcuckoo\.|\bmagic\.")
-_ERR_LINE = re.compile(r"\((\d+)\)")
+_ERR_LINE = re.compile(r"\((\d+)\)|\bline (\d+)")
 OWN_RULES = Path(__file__).parent / "rules" / "winsentinel.yar"
 
 
@@ -44,12 +44,12 @@ def compile_tolerant(source: str, max_rounds: int = 60) -> tuple[yara.Rules, int
             m = _ERR_LINE.search(str(e))
             if not m:
                 raise
-            line = int(m.group(1))
+            line = int(m.group(1) or m.group(2))
             # Map the failing line back to a rule and drop it (also catches rules depending on dropped ones).
             offset = header.count("\n")
             for i, (_, t) in enumerate(kept):
                 n = t.count("\n")
-                if offset < line <= offset + n + 1:
+                if offset < line <= offset + max(n, 1):
                     kept.pop(i)
                     dropped += 1
                     break

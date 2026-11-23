@@ -1,7 +1,7 @@
 [project]
 name = "winsentinel"
 version = "0.1.0"
-description = "Add your description here"
+description = "Defensive, read-only security scanner for Windows"
 readme = "README.md"
 authors = [
     { name = "Mike", email = "51136811+eaglescoutmaster@users.noreply.github.com" }
