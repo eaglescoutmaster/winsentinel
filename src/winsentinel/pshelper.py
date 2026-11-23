@@ -103,7 +103,7 @@ def check_signatures(paths: list[str], chunk: int = 200) -> dict[str, dict]:
         for r in rows:
             status = r.get("status", "Unknown")
             # Store (MSIX) apps are signed at package level; per-file Authenticode says NotSigned.
-            if status == "NotSigned" and "\program files\windowsapps\\" in r["path"].lower():
+            if status == "NotSigned" and "\\program files\\windowsapps\\" in r["path"].lower():
                 status = "PackageSigned"
             result[r["path"]] = {
                 "status": status,

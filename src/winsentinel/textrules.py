@@ -35,6 +35,7 @@ class Hit:
     line: int
     excerpt: str
     decoded_from: str = ""  # "", "base64", "base64-utf16", "hex"
+    quoted: bool = False  # match starts right after a quote: usually an example or a warning about the phrase
 
     @property
     def signal(self) -> str:
@@ -51,6 +52,7 @@ _SENSITIVE = (
     r"(?:\$\{?\w{0,30}(?:TOKEN|SECRET|PASSWORD|API_?KEY)\w{0,10}\}?|\$env:\w{0,30}(?:TOKEN|SECRET|KEY|PASSWORD)"
     r"|\.env\b|\.ssh[\\/]|\.aws[\\/]|id_rsa|id_ed25519|\.credentials\.json|\.claude\.json|\.npmrc|\.netrc)"
 )
+_UPLOAD = r"(?:\s-d\b|--data[-\w]*|\s-F\b|--form\b|\s-T\b|--upload-file|-Body\b|-InFile\b|--post-(?:data|file))"
 
 AI_RULES: list[Rule] = [
     _r("PI-001", "prompt-injection", "high", "Instruction-override phrase",
@@ -78,10 +80,12 @@ AI_RULES: list[Rule] = [
     _r("UNI-003", "hidden-unicode", "medium", "Run of zero-width characters",
        "[​‌‍⁠﻿]{3,}", "Runs of zero-width characters can encode hidden data.", 0),
     _r("HID-001", "prompt-injection", "medium", "Hidden HTML comment with agent directive",
-       r"<!--[^>]{0,400}\b(?:ignore|system prompt|instructions?|disregard|override|you must)\b[^>]{0,400}-->",
+       r"<!--[^>]{0,400}\b(?:ignore (?:all|previous|prior|the)|system prompt|disregard|override your|you must|do not tell)\b[^>]{0,400}-->",
        "Markdown comments are invisible when rendered but read by an agent."),
     _r("EXF-001", "exfiltration", "high", "Network upload of secrets or credential files",
-       _NET + r"\b[^\n]{0,300}" + _SENSITIVE + r"|" + _SENSITIVE + r"[^\n]{0,200}\|\s*" + _NET + r"\b",
+       # An auth header alone is normal API use: require an upload flag, or a pipe into the client.
+       _NET + r"\b[^\n]{0,300}" + _UPLOAD + r"[^\n]{0,200}" + _SENSITIVE
+       + r"|" + _SENSITIVE + r"[^\n]{0,200}\|\s*" + _NET + r"\b",
        "A network client is combined with a secret variable or credential file on one line."),
     _r("EXF-002", "exfiltration", "medium", "Known data-collection endpoint",
        r"webhook\.site|requestbin\.|pipedream\.net|\.ngrok(?:-free)?\.(?:io|app)|discord(?:app)?\.com/api/webhooks"
@@ -204,6 +208,9 @@ def _excerpt(text: str, start: int, end: int) -> str:
     return "".join(c if c.isprintable() else f"<U+{ord(c):04X}>" for c in s)[:200]
 
 
+_QUOTES = "\"'`“‘("
+
+
 def scan_text(text: str, rules: list[Rule], depth: int = 2, _via: str = "") -> list[Hit]:
     text = text[:MAX_TEXT]
     hits: list[Hit] = []
@@ -211,7 +218,8 @@ def scan_text(text: str, rules: list[Rule], depth: int = 2, _via: str = "") -> l
         n = 0
         for m in rule.pattern.finditer(text):
             line = text.count("\n", 0, m.start()) + 1 if not _via else 0
-            hits.append(Hit(rule, line, _excerpt(text, m.start(), m.end()), _via))
+            quoted = m.start() > 0 and text[m.start() - 1] in _QUOTES
+            hits.append(Hit(rule, line, _excerpt(text, m.start(), m.end()), _via, quoted))
             n += 1
             if n >= MAX_HITS_PER_RULE:
                 break
