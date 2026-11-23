@@ -42,7 +42,7 @@ class Config:
         ]
     )
     quick_files_budget_s: int = 180
-    threads: int = 6
+    threads: int = field(default_factory=lambda: min(16, os.cpu_count() or 4))
     # ai-tooling module
     ai_dirs: list[Path] = field(default_factory=lambda: [HOME / ".claude"])
     ai_files: list[Path] = field(default_factory=lambda: [HOME / ".claude.json"])
