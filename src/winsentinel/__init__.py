@@ -1,6 +1,6 @@
 """winsentinel: defensive, read-only security scanner for Windows."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def main() -> int:
