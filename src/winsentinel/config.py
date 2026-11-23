@@ -22,9 +22,9 @@ def _env(name: str, default: str = "") -> Path:
     return Path(os.environ.get(name, default))
 
 
-def discover_code_dirs(limit: int = 40) -> list[Path]:
-    """Default code directories: git repositories directly under the usual project folders.
-    Override with code_dirs in winsentinel.toml."""
+def discover_code_dirs(limit: int = 12) -> list[Path]:
+    """Default code directories: the most recently modified git repositories directly under the
+    usual project folders. Override with code_dirs in winsentinel.toml."""
     roots = [HOME, HOME / "source" / "repos", HOME / "Documents" / "GitHub", HOME / "projects", HOME / "code",
              HOME / "dev", HOME / "repos", HOME / "src"]
     out: list[Path] = []
@@ -35,7 +35,14 @@ def discover_code_dirs(limit: int = 40) -> list[Path]:
                     out.append(d)
         except OSError:
             continue
-    return out[:limit]
+
+    def mtime(p: Path) -> float:
+        try:
+            return p.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    return sorted(out, key=mtime, reverse=True)[:limit]
 
 
 @dataclass

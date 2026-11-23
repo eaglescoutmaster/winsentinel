@@ -80,7 +80,7 @@ def run_gitleaks(ctx, target: Path, history: bool, cfg: Path) -> list[dict]:
                 "--max-target-megabytes", "5", "--log-level", "error"]
         if history:
             args.append("--log-opts=--all")
-        p = ctx.tools.run("gitleaks", args, timeout=1800)
+        p = ctx.tools.run("gitleaks", args, timeout=1800 if ctx.full else 300)
         if not out.exists():
             raise ToolError(f"gitleaks produced no report (exit {p.returncode}): {p.stderr.decode('utf-8', 'replace')[:300]}")
         data = json.loads(out.read_text("utf-8") or "[]")
@@ -93,7 +93,7 @@ def run_trufflehog(ctx, target: Path, history: bool, excl: Path) -> list[dict]:
         args = ["git", "file:///" + str(target).replace("\\", "/"), "--no-verification", "--json", "--no-update"]
     else:
         args = ["filesystem", str(target), "--no-verification", "--json", "--no-update", "--exclude-paths", str(excl)]
-    p = ctx.tools.run("trufflehog", args, timeout=1800)
+    p = ctx.tools.run("trufflehog", args, timeout=1800 if ctx.full else 300)
     rows = []
     for line in p.stdout.decode("utf-8", "replace").splitlines():
         if not line.startswith("{"):
@@ -220,6 +220,7 @@ def _scan_code(ctx, res: ModuleResult, ok: dict[str, bool], cfg: Path, excl: Pat
                     details={"line": lines[0], "lines": lines[:50], "key": kinds, "commit": m["commit"],
                              "source_file": m["file"], "value": f"{kinds}|{len(lines)}"})
     res.coverage["code_dirs_scanned"] = scanned
+    res.coverage["code_dirs"] = ", ".join(t.name for t in targets) or "none found"
     res.coverage["git_history"] = "yes" if ctx.full else "no (quick mode: working tree only)"
 
 
