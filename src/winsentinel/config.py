@@ -52,7 +52,7 @@ def discover_code_dirs(limit: int = 12) -> list[Path]:
     for root in roots:
         try:
             for d in sorted(root.iterdir()):
-                if d.is_dir() and (d / ".git").exists() and d.resolve() != REPO_ROOT and d not in out:
+                if d.is_dir() and not d.name.startswith(".") and (d / ".git").exists() and d.resolve() != REPO_ROOT and d not in out:
                     out.append(d)
         except OSError:
             continue

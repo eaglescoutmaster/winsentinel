@@ -190,7 +190,7 @@ def _launchd_entries(res: ModuleResult) -> list[Entry]:
             if pl.get("RunAtLoad") and pl.get("KeepAlive") and user and not str(pl.get("Label", "")).startswith("com.apple."):
                 e.name += " [RunAtLoad+KeepAlive]"
     res.coverage["launchd_plists"] = n
-    rc, text = sh(["sfltool", "dumpbtm"], timeout=60)
+    rc, text = sh(["sfltool", "dumpbtm"], timeout=8)
     if rc == 0 and text:
         items = re.findall(r"(?m)^\s*Name:\s*(.+)$", text)
         res.coverage["login_items_listed"] = len(items)
@@ -201,7 +201,7 @@ def _launchd_entries(res: ModuleResult) -> list[Entry]:
 
 def _analyse(res: ModuleResult, entries: list[Entry], trusted: set[str]) -> None:
     resolved = [(e, *resolve_command(e.command)) for e in entries]
-    bins = [prog for _, prog, _ in resolved if prog]
+    bins = [x for _, prog, script in resolved for x in (prog, script) if x]
     sigs = check_trust(bins) if bins else {}
     listed = 0
     for e, prog, script in resolved:
@@ -232,15 +232,18 @@ def _analyse(res: ModuleResult, entries: list[Entry], trusted: set[str]) -> None
             if not os.path.exists(first):
                 signals.append("target file does not exist")
                 sev = max(sev, "low", key=_RANK.index)
-        sig = sigs.get(prog or "")
-        if sig and not target:
+        sig = sigs.get(run_path or "")
+        if sig:
             if sig["status"] == "Valid" and (sig["os_binary"] or sig["signer"].lower() in trusted) and not signals:
-                continue  # vouched-for program with nothing odd about it: not listed
-            if sig["status"] in ("NotSigned", "HashMismatch"):
-                signals.append(f"code signature: {sig['status']}")
-                sev = max(sev, "medium" if sig["status"] == "NotSigned" else "high", key=_RANK.index)
-            elif sig["status"] == "Unpackaged" and not prog.startswith(_SYSTEM_DIRS):
-                signals.append("program is not owned by any installed package")
+                continue  # vouched-for program or script with nothing odd about it: not listed
+            if sig["status"] == "HashMismatch":
+                signals.append("code signature: broken (file changed after signing)")
+                sev = max(sev, "high", key=_RANK.index)
+            elif sig["status"] == "NotSigned" and not target:
+                signals.append("code signature: unsigned")
+                sev = max(sev, "low", key=_RANK.index)
+            elif sig["status"] == "Unpackaged" and not run_path.startswith(_SYSTEM_DIRS):
+                signals.append("target is not owned by any installed package")
         listed += 1
         res.add(rule_id="PERSIST-" + e.source.split()[0].upper(), title=f"{e.source}: {e.name}"[:120], severity=sev,
                 evidence=e.location, why="; ".join(dict.fromkeys(signals)) or "Starts automatically; nothing suspicious found.",

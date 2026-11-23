@@ -1,6 +1,6 @@
 # winsentinel
 
-Defensive, **read-only** security scanner for a Windows 11 machine. It looks for malware, persistence,
+Defensive, **read-only** security scanner for Windows 10/11, Linux and macOS. It looks for malware, persistence,
 vulnerabilities, leaked secrets and risky configuration, and writes a report. It never deletes, quarantines or
 changes anything: v1 has no remediation code paths at all.
 
@@ -18,6 +18,12 @@ One step from a fresh machine (installs uv if missing, then dependencies, tools,
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap.ps1
+```
+
+Linux and macOS (no sudo; needs `curl` or `wget`):
+
+```sh
+sh bootstrap.sh
 ```
 
 Or by hand:
@@ -121,6 +127,25 @@ with `--module` or `--path` use a separate baseline so they cannot hide findings
 | `files` | YARA (built-in + YARA Forge core), SHA256, PE traits, disguised executables, known-vulnerable drivers | yara-python, pefile | Downloads, Desktop, Temp, Startup, Public (3-minute budget) | all fixed drives | protected directories |
 | `iocs` | Indicators from files flagged above | built-in; VirusTotal with `--vt` | yes | | |
 
+### Linux and macOS
+
+The same commands and report format. `secrets`, `code`, `ai-tooling`, `iocs` and `analyze` work as on Windows.
+The host modules have their own implementations:
+
+| Module | Linux | macOS |
+|---|---|---|
+| `av` (replaces `defender`) | ClamAV installed? signature age | XProtect version and age, Gatekeeper state, XProtect detections in the last 7 days |
+| `persistence` | systemd units and timers, cron, `rc.local`, init scripts, XDG autostart, shell start-up files, `/etc/ld.so.preload`, `authorized_keys`, sudoers drop-ins | LaunchAgents, LaunchDaemons, cron, periodic scripts, configuration profiles, shell start-up files, `authorized_keys` |
+| `processes` | `/proc`: deleted, in-memory (memfd), temp-dir or hidden executables, kernel-thread name masquerade; listeners (`ss`); hosts file; proxy | `ps` + code signature of non-system programs; listeners (`lsof`); hosts file; system proxy |
+| `hardening` | firewall, sshd settings, kernel sysctls, SELinux/AppArmor, disk encryption, Secure Boot, uid-0 and empty-password accounts, auto-updates, setuid-root files no package owns | SIP, Gatekeeper, FileVault, firewall, auto-updates, guest account, auto-login, Remote Login and sharing services |
+| `vulns` | pending apt/dnf/pacman updates (from the local cache), out-of-tree or unsigned kernel modules, dependency CVEs; `--full` adds package integrity (`dpkg --verify` / `rpm -Va`) and Trivy | `softwareupdate -l`, `brew outdated`, third-party system and kernel extensions, dependency CVEs |
+| `files` | YARA, hashes, ELF analysis (pyelftools), shell-script rules; quick scan covers Downloads, Desktop, `/tmp`, `/var/tmp`, `/dev/shm`, autostart and cron dirs | YARA, hashes, Mach-O string-table analysis, `codesign`; quick scan covers Downloads, Desktop, `/tmp`, Launch* dirs, `/Users/Shared` |
+
+"Who vouches for this file" differs per system: Authenticode on Windows, the code signature on macOS, and on
+Linux (which has no code signing) whether an installed package owns the path.
+
+Run with `sudo` for full coverage: `sudo "$(command -v uv)" run winsentinel scan --quick`.
+
 ### Scan time
 
 Quick: roughly 5 to 10 minutes. Full: hours on first run (every file on every fixed drive is sniffed; executables,
@@ -168,7 +193,15 @@ trusted_signers = ['Microsoft Corporation', 'Microsoft Windows']
   (the count is in the report).
 - "Outdated application" comes from `winget upgrade` and does not map to specific CVEs, apart from a small
   built-in table of widely exploited versions. Dependency CVEs are not checked for reachability.
-- Browser extension checks cover Chrome, Edge and Brave manifests only.
+- Browser extension checks cover Chrome, Edge and Brave manifests only, and only on Windows.
+- Linux: package ownership says where a path came from, not that its bytes are unchanged (that is the `--full`
+  package-integrity check). Pending updates come from the local package cache, so they are as fresh as your last
+  `apt update`. Only `/etc` and per-user systemd units are read, not the vendor units under `/usr/lib`.
+- macOS: Mach-O analysis reads the string table rather than parsing load commands, so imported-symbol lists are
+  approximate. Login items, TCC permissions and other users' data need root or Full Disk Access and are reported
+  as skipped without it. The macOS code is exercised by CI on a GitHub runner, not on a range of real Macs.
+- Under WSL the Windows drives (`/mnt/c` ...) are not scanned and firewall, disk-encryption and Secure Boot
+  checks are skipped; run winsentinel on Windows for those.
 - Signature validity is necessary, not sufficient: malware can be validly signed, so a valid non-trusted
   signature only caps severity rather than clearing a finding.
 

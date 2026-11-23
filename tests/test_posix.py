@@ -163,6 +163,7 @@ def test_planted_persistence_entries_are_graded(tmp_path, monkeypatch):
     assert "ok.service" not in by                      # packaged program, nothing odd: not listed
     assert by["missing"].severity == "low" and "does not exist" in by["missing"].why
     assert res.coverage["autostart_entries_total"] == 4
+    evil.unlink()  # do not leave a planted script in the temp dir for the next real scan to find
 
 
 @posix_only

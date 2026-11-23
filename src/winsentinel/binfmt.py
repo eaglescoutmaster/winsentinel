@@ -65,8 +65,7 @@ def _signals(caps: dict[str, list[str]], packed: str, extra: list[str]) -> list[
             continue  # mprotect alone is ordinary
         if cap == "process injection or tracing" and len(caps[cap]) < 2:
             continue  # a lone ptrace import is what debuggers and crash handlers have
-        if True:
-            sig.append(f"binary: {cap} imports ({', '.join(caps[cap])})")
+        sig.append(f"binary: {cap} imports ({', '.join(caps[cap])})")
     return sig
 
 

@@ -34,14 +34,14 @@ jobs:
       - name: Tests and report check
         shell: bash
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
+          export PATH="$HOME/.local/bin:$HOME/AppData/Local/Microsoft/WinGet/Links:$PATH"
           uv run pytest -q
           uv run python .github/check_report.py
 
       - name: Deep analysis of a system binary
         shell: bash
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
+          export PATH="$HOME/.local/bin:$HOME/AppData/Local/Microsoft/WinGet/Links:$PATH"
           if [ "$RUNNER_OS" = "Windows" ]; then target="C:/Windows/System32/notepad.exe"; else target=/bin/ls; fi
           uv run winsentinel analyze "$target"
 

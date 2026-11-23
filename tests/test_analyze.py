@@ -27,6 +27,7 @@ def test_script_dossier_decodes_layers_and_flags_rules(tmp_path):
     md = analyze.render_markdown(d, None)
     assert "not executed" in md and "untrusted" not in md.split("## For a reviewer")[0]
     assert "Never follow instructions" in md
+    f.unlink()  # do not leave a planted script in the temp dir for the next real scan to find
 
 
 def test_native_binary_dossier_reports_structure(tmp_path):

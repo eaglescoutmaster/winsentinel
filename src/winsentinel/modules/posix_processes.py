@@ -112,7 +112,7 @@ def _assess(res: ModuleResult, procs: list[dict], trusted: set[str]) -> None:
             if sig["status"] == "NotSigned" and OS == "macos":
                 signals.append("code signature: unsigned")
                 if posix_user_writable(path):
-                    sev = max(sev, "medium", key=["info", "low", "medium", "high"].index)
+                    sev = max(sev, "low", key=["info", "low", "medium", "high"].index)
             elif sig["status"] == "HashMismatch":
                 signals.append("code signature: broken (file changed after signing)")
                 sev = "high"
@@ -124,7 +124,9 @@ def _assess(res: ModuleResult, procs: list[dict], trusted: set[str]) -> None:
         if key in seen:
             continue
         seen.add(key)
-        res.add(rule_id="PROC-SUSPICIOUS", title=f"Suspicious process: {p['comm']} (pid {p['pid']})", severity=sev,
+        only_unsigned = signals == ["code signature: unsigned"]
+        res.add(rule_id="PROC-UNSIGNED" if only_unsigned else "PROC-SUSPICIOUS",
+                title=f"{'Unsigned' if only_unsigned else 'Suspicious'} process: {p['comm']} (pid {p['pid']})", severity=sev,
                 evidence=path or p["cmd"][:200], why="; ".join(signals), confidence=0.6 if len(signals) >= 2 else 0.4,
                 signals=signals, remediation="Find what started it (parent process, start-up entries) before killing it; "
                 "note the path and hash first.", details={"key": path or p["comm"], "path": path if os.path.isfile(path) else "",

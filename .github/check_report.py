@@ -18,8 +18,10 @@ for m in doc["modules"]:
     if m["status"] == "error":
         bad.append(m["name"])
 print("\ntop findings:")
-for f in doc["findings"][:25]:
+for f in doc["findings"][:40]:
     print(f"  [{f['severity']:8}] {f['module']}: {f['title'][:90]} -> {f['evidence'][:90]}")
+    if f["severity"] != "info":
+        print(f"             why: {f['why'][:260]}")
 if bad:
     sys.exit(f"modules crashed: {', '.join(bad)}")
 print("\nall modules finished without crashing")

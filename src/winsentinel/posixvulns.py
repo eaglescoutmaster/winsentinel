@@ -111,7 +111,9 @@ def kernel_extensions(ctx, res: ModuleResult) -> None:
                     kind="fact", remediation="Remove the owning app if you do not recognise an extension.",
                     details={"key": "sysext"})
         rc, text = sh(["kmutil", "showloaded", "--list-only", "--variant-suffix", "release"], timeout=60)
-        kexts = sorted({m for m in re.findall(r"\b((?!com\.apple\.)[a-zA-Z0-9]+(?:\.[A-Za-z0-9_\-]+){2,})\s+\(", text)})
+        ids = re.findall(r"(?m)\s([A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)+)\s+\(", text)
+        res.coverage["kernel_extensions_loaded"] = len(set(ids))
+        kexts = sorted({i for i in ids if not i.startswith("com.apple.")})
         if kexts:
             res.add(rule_id="VULN-KEXT", title=f"{len(kexts)} third-party kernel extensions loaded", severity="medium",
                     evidence="kmutil showloaded", why="; ".join(kexts[:20]) + ". Kernel extensions run with full "
