@@ -1,0 +1,141 @@
+"""winsentinel command line."""
+from __future__ import annotations
+
+import argparse
+import platform
+import sys
+from datetime import datetime
+from pathlib import Path
+
+from . import __version__
+from .config import load_config
+from .findings import SEVERITIES, apply_baseline
+from .pshelper import is_admin
+from .report import new_report_dir, sort_findings, write_json, write_markdown, write_sarif
+from .runner import Context, run_modules
+from .toolchain import TOOLS, ToolError, Toolchain
+from .verify import verify_findings
+
+
+def _parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="winsentinel", description="Read-only Windows security scanner.")
+    p.add_argument("--version", action="version", version=__version__)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("scan", help="run a scan and write a report")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--quick", action="store_true", help="fast triage (default)")
+    g.add_argument("--full", action="store_true", help="all fixed drives, git history, code analysis")
+    s.add_argument("--module", action="append", metavar="X", help="run only this module (repeatable)")
+    s.add_argument("--path", action="append", metavar="P", type=Path,
+                   help="scan this path instead of the default roots (files/secrets/code/ai-tooling)")
+    s.add_argument("--config", type=Path, help="path to winsentinel.toml")
+    s.add_argument("--update-baseline", action="store_true", help="accept current findings as the baseline")
+    s.add_argument("--vt", action="store_true",
+                   help="opt in: look up SHA256 hashes of flagged files on VirusTotal (needs VT_API_KEY; hashes only)")
+    s.add_argument("--defender-scan", action="store_true",
+                   help="also trigger a Defender quick scan in --quick mode (always on in --full)")
+
+    t = sub.add_parser("tools", help="show or install pinned external tools")
+    t.add_argument("action", choices=["status", "install"])
+    t.add_argument("names", nargs="*", help="tool names (default: all)")
+    t.add_argument("--config", type=Path)
+
+    sub.add_parser("modules", help="list modules")
+    return p
+
+
+def _cmd_tools(args) -> int:
+    cfg = load_config(args.config)
+    tc = Toolchain(cfg.tools_dir)
+    if args.action == "status":
+        for name, where in tc.status().items():
+            print(f"{name:24} {TOOLS[name].version:14} {where}")
+        return 0
+    rc = 0
+    for name in args.names or list(TOOLS):
+        if name not in TOOLS:
+            print(f"unknown tool {name}", file=sys.stderr)
+            rc = 2
+            continue
+        try:
+            tc.install(name)
+        except (ToolError, OSError) as e:
+            print(f"FAILED {name}: {e}", file=sys.stderr)
+            rc = 1
+    return rc
+
+
+def _cmd_scan(args) -> int:
+    from .modules import REGISTRY
+
+    cfg = load_config(args.config)
+    names = args.module or list(REGISTRY)
+    bad = [n for n in names if n not in REGISTRY]
+    if bad:
+        print(f"unknown module(s): {', '.join(bad)}. Available: {', '.join(REGISTRY)}", file=sys.stderr)
+        return 2
+    mode = "full" if args.full else "quick"
+    report_dir = new_report_dir(cfg.reports_dir)
+    ctx = Context(
+        cfg=cfg, mode=mode, admin=is_admin(), tools=Toolchain(cfg.tools_dir), report_dir=report_dir,
+        paths=[p.resolve() for p in (args.path or [])], vt=args.vt,
+        defender_scan=args.defender_scan or mode == "full",
+    )
+    meta = {
+        "started": datetime.now().isoformat(timespec="seconds"),
+        "mode": mode,
+        "admin": ctx.admin,
+        "host": platform.node(),
+        "os": platform.platform(),
+        "modules": names,
+        "not_run": [n for n in REGISTRY if n not in names],
+        "paths": [str(p) for p in ctx.paths],
+    }
+    if not ctx.admin:
+        ctx.log("not elevated: checks that need admin are skipped and listed in the report")
+    results = run_modules(ctx, names)
+    findings = [f for r in results for f in r.findings]
+
+    defender_paths = set()
+    d = ctx.results.get("defender")
+    if d:
+        defender_paths = set(d.coverage.get("_detected_paths", []))
+        d.coverage.pop("_detected_paths", None)
+    ctx.log("[verify] second pass on high/critical findings")
+    meta["verify_downgraded"] = verify_findings(findings, cfg.trusted_signers, defender_paths)
+
+    # A partial run must not rewrite the baseline for modules that did not run.
+    partial_run = bool(args.module or args.path)
+    base_path = cfg.state_dir / ("baseline.json" if not partial_run else "baseline-partial.json")
+    baseline = apply_baseline(findings, base_path, update=args.update_baseline)
+    meta["finished"] = datetime.now().isoformat(timespec="seconds")
+
+    write_json(report_dir / "findings.json", meta, results, findings)
+    write_sarif(report_dir / "findings.sarif", findings)
+    write_markdown(report_dir / "report.md", meta, results, findings, baseline)
+
+    counts = {s: sum(f.severity == s for f in findings) for s in SEVERITIES}
+    print("findings: " + ", ".join(f"{s}={counts[s]}" for s in SEVERITIES))
+    for f in sort_findings(findings)[:10]:
+        print(f"  [{f.severity:8}] {f.module}: {f.title} -> {f.evidence}")
+    print(f"report: {report_dir / 'report.md'}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    args = _parser().parse_args(argv)
+    if args.cmd == "tools":
+        return _cmd_tools(args)
+    if args.cmd == "modules":
+        from .modules import REGISTRY
+
+        for name, mod in REGISTRY.items():
+            print(f"{name:12} {mod.DESCRIPTION}")
+        return 0
+    return _cmd_scan(args)

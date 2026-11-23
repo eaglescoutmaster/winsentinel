@@ -1,0 +1,42 @@
+winsentinel includes regular expressions and heuristics ported to Python from
+the following MIT-licensed projects. No code from them is executed or vendored.
+
+- skillsguard, Copyright (c) 2026 Teycir Ben Soltane
+  https://github.com/teycir/skillsguard
+  (prompt-injection, hidden-unicode and PowerShell patterns; decode-then-rescan)
+
+- claude-skill-antivirus, Copyright (c) 2026 Lucas
+  https://github.com/claude-world/claude-skill-antivirus
+  (magic-byte sniffing, fail-closed coverage accounting, exfiltration patterns)
+
+- malware-check, Copyright (c) 2026 Moamen Basel
+  https://github.com/momenbasel/malware-check
+  (LOLBin pattern, PE import-chain heuristics, entropy thresholds)
+
+- malware-analysis-claude-skills, Copyright (c) 2025 gl0bal01
+  https://github.com/gl0bal01/malware-analysis-claude-skills
+  (PE packer heuristics, IOC extraction patterns)
+
+- security-review, Copyright (c) 2026 Codemax IT Solutions Pvt. Ltd.
+  https://github.com/cdmx-in/security-review
+  (canary preflight idea, secret triage and redaction rules)
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
