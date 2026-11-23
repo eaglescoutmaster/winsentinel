@@ -22,12 +22,26 @@ def _env(name: str, default: str = "") -> Path:
     return Path(os.environ.get(name, default))
 
 
+def discover_code_dirs(limit: int = 40) -> list[Path]:
+    """Default code directories: git repositories directly under the usual project folders.
+    Override with code_dirs in winsentinel.toml."""
+    roots = [HOME, HOME / "source" / "repos", HOME / "Documents" / "GitHub", HOME / "projects", HOME / "code",
+             HOME / "dev", HOME / "repos", HOME / "src"]
+    out: list[Path] = []
+    for root in roots:
+        try:
+            for d in sorted(root.iterdir()):
+                if d.is_dir() and (d / ".git").exists() and d.resolve() != REPO_ROOT and d not in out:
+                    out.append(d)
+        except OSError:
+            continue
+    return out[:limit]
+
+
 @dataclass
 class Config:
     data_dir: Path = REPO_ROOT
-    code_dirs: list[Path] = field(
-        default_factory=lambda: [HOME / "agentroom", HOME / "TwoAI", HOME / "OpenManus", HOME / "AI Coder"]
-    )
+    code_dirs: list[Path] = field(default_factory=lambda: discover_code_dirs())
     # files module
     exclude_paths: list[Path] = field(default_factory=list)
     max_file_mb: int = 64

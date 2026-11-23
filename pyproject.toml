@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Mike", email = "51136811+eaglescoutmaster@users.noreply.github.com" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pefile>=2024.8.26",
     "yara-python>=4.5.4",

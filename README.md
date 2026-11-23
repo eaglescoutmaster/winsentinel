@@ -10,10 +10,19 @@ changes anything: v1 has no remediation code paths at all.
 
 ## Install
 
-Requires Windows 10/11, Python 3.14 and [uv](https://docs.astral.sh/uv/). PowerShell 5.1 is used for read-only queries.
+Requires Windows 10/11 and [uv](https://docs.astral.sh/uv/). uv downloads Python 3.13 itself; 3.13 is pinned
+because `yara-python` ships a prebuilt wheel for it, so no compiler is needed. PowerShell 5.1 is used for
+read-only queries.
+
+One step from a fresh machine (installs uv if missing, then dependencies, tools, tests and a quick scan):
 
 ```powershell
-cd C:\Users\mwhite8\winsentinel
+powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap.ps1
+```
+
+Or by hand:
+
+```powershell
 uv sync
 uv run winsentinel tools install
 ```
@@ -89,7 +98,7 @@ path, size, mtime and rules version, so an interrupted scan resumes and later fu
 Optional `winsentinel.toml` in the repo root (git-ignored):
 
 ```toml
-code_dirs = ['C:\Users\mwhite8\agentroom', 'C:\Users\mwhite8\TwoAI']
+code_dirs = ['C:\Users\you\project-a', 'C:\Users\you\project-b']   # default: git repos found under your profile
 exclude_paths = ['D:\VMs', 'E:\Epic Games']   # files module only
 quick_paths = ['%USERPROFILE%\Downloads']
 max_file_mb = 64
