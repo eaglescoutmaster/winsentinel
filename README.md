@@ -40,7 +40,7 @@ uv run winsentinel scan --quick         # triage, a few minutes
 uv run winsentinel scan --full          # all fixed drives, git history, Semgrep, Trivy, Windows Update search
 uv run winsentinel scan --module persistence --module hardening
 uv run winsentinel scan --module files --path D:\Downloads
-uv run winsentinel scan --full --vt     # opt in: hash-only VirusTotal lookups (needs VT_API_KEY)
+uv run winsentinel scan --full --vt     # opt in: hash-only VirusTotal lookups (winsentinel keys set virustotal)
 uv run winsentinel scan --update-baseline
 uv run winsentinel tools status
 uv run winsentinel modules
@@ -64,13 +64,20 @@ uv run winsentinel analyze C:\path\to\suspicious.exe --llm    # also ask the Cla
 | `analysis.md` | Readable summary, plus the review rules an LLM (or a person) should apply to the dossier |
 | `verdict.json` | Only with `--llm`: verdict, confidence, likely intent, evidence for and against, unknowns, manual next steps |
 
-Two ways to get reasoning about intent:
+`--llm` needs a Claude sign-in. Pick one, once:
 
-- **Claude Code session.** Run `analyze` without `--llm` and ask Claude Code to read `analysis.md` and
-  `dossier.json`. No API key needed.
-- **`--llm`.** Sends the dossier to the Claude API (`claude-opus-5-5` by default, `--model` to change). Needs
-  `ANTHROPIC_API_KEY` or an `ant auth login` profile. Without credentials the dossier is still written and the
-  verdict is reported as not available.
+```powershell
+uv run winsentinel login                  # Claude subscription: browser sign-in, "Continue with Google" works
+uv run winsentinel keys set anthropic     # or an API key: hidden prompt, stored in Windows Credential Manager
+uv run winsentinel keys status            # shows what is set, never the values
+```
+
+- **`login`** uses the Claude Code CLI's own sign-in and runs the verdict through it with every tool disabled.
+  It needs Claude Code installed; winsentinel stores no token itself.
+- **API key** goes straight to the Claude API (`claude-opus-5-5` by default, `--model` to change).
+- With both, the API key is used; `--backend claude-code` or `--backend api` forces one.
+- With neither, the dossier is still written and the verdict is reported as not available.
+- You can also skip `--llm` and ask Claude Code to read `analysis.md` and `dossier.json`.
 
 The verdict is a language model's opinion of static evidence. It can be wrong in both directions, it never
 changes scan findings, and strings inside a sample can be written to mislead it (the prompt treats the dossier

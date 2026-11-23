@@ -109,9 +109,11 @@ def run(ctx) -> ModuleResult:
     res.coverage["flagged_files"] = len(flagged)
     if not flagged:
         res.notes.append("no flagged files from other modules in this run")
-    key = os.environ.get("VT_API_KEY", "") if ctx.vt else ""
+    from ..keys import get as get_key
+
+    key = get_key("virustotal")[0] if ctx.vt else ""
     if ctx.vt and not key:
-        res.note("--vt given but VT_API_KEY is not set: VirusTotal lookup skipped")
+        res.note("--vt given but no VirusTotal key is set (winsentinel keys set virustotal): lookup skipped")
     res.coverage["virustotal"] = "hash-only lookups enabled" if key else "off (offline)"
     all_iocs = []
     lookups = 0

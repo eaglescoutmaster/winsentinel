@@ -70,4 +70,8 @@ if (-not $SkipScan) {
     $latest = Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'reports') -Directory | Sort-Object Name | Select-Object -Last 1
     if ($latest) { Write-Host "`nREPORT: $(Join-Path $latest.FullName 'report.md')" -ForegroundColor Green }
 }
+Write-Host "`nOptional, for 'analyze --llm' and 'scan --vt':"
+Write-Host '  uv run winsentinel login                 # Claude subscription, browser sign-in (Google works)'
+Write-Host '  uv run winsentinel keys set anthropic    # or a Claude API key'
+Write-Host '  uv run winsentinel keys set virustotal   # VirusTotal hash lookups'
 exit 0

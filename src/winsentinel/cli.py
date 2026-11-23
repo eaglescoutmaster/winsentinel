@@ -46,10 +46,72 @@ def _parser() -> argparse.ArgumentParser:
     a.add_argument("--llm", action="store_true",
                    help="opt in: send the evidence dossier (not the file) to the Claude API for a verdict on intent")
     a.add_argument("--model", default=None, help="Claude model id for --llm")
+    a.add_argument("--backend", choices=["auto", "api", "claude-code"], default="auto",
+                   help="auto: API key if one is set, else the signed-in Claude Code account")
     a.add_argument("--config", type=Path)
+
+    k = sub.add_parser("keys", help="store, check or remove API keys (Windows Credential Manager)")
+    k.add_argument("action", choices=["status", "set", "remove"])
+    k.add_argument("name", nargs="?", choices=["anthropic", "virustotal"])
+
+    lg = sub.add_parser("login", help="sign in to Claude in the browser (Google works) for analyze --llm")
+    lg.add_argument("--console", action="store_true", help="sign in to the API Console instead of a subscription")
 
     sub.add_parser("modules", help="list modules")
     return p
+
+
+def _cmd_keys(args) -> int:
+    import getpass
+
+    from . import keys
+
+    if args.action == "status":
+        for name, (env, purpose, _) in keys.KEYS.items():
+            _, source = keys.get(name)
+            print(f"{name:11} {'set (' + source + ')' if source else 'not set':26} {purpose}")
+        cc = keys.claude_status()
+        state = ("signed in (" + cc["method"] + ")" if cc["logged_in"] else "not signed in: winsentinel login") \
+            if cc["installed"] else "Claude Code not installed"
+        print(f"{'claude':11} {state:26} analyze --llm through your Claude account")
+        return 0
+    if not args.name:
+        print("name required: anthropic or virustotal", file=sys.stderr)
+        return 2
+    env, purpose, url = keys.KEYS[args.name]
+    if args.action == "remove":
+        print("removed" if keys.remove(args.name) else "nothing stored")
+        return 0
+    print(f"{args.name} key for {purpose}. Get one at {url}")
+    try:
+        value = getpass.getpass("Paste the key (input is hidden) and press Enter: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\ncancelled", file=sys.stderr)
+        return 1
+    if not value:
+        print("nothing entered; nothing stored", file=sys.stderr)
+        return 1
+    try:
+        keys.store(args.name, value)
+    except Exception as e:
+        print(f"could not store the key: {e}", file=sys.stderr)
+        return 1
+    print("stored in Windows Credential Manager for this user. Not written to any file or environment variable.")
+    return 0
+
+
+def _cmd_login(args) -> int:
+    from . import keys
+
+    if not keys.claude_cli():
+        print("Claude Code is not installed. Install it (https://claude.com/claude-code), then run this again.\n"
+              "Or use an API key instead: winsentinel keys set anthropic", file=sys.stderr)
+        return 1
+    print("Opening the Claude sign-in page. Choose 'Continue with Google' there if that is how you sign in.")
+    rc = keys.claude_login(console=args.console)
+    st = keys.claude_status()
+    print("signed in: analyze --llm will use this account" if st["logged_in"] else "not signed in")
+    return rc if not st["logged_in"] else 0
 
 
 def _cmd_analyze(args) -> int:
@@ -68,8 +130,16 @@ def _cmd_analyze(args) -> int:
         return 1
     verdict = None
     if args.llm:
-        print("--llm: sending the evidence dossier (strings, imports, script text; not the file) to the Claude API")
-        verdict = analyze.llm_verdict(dossier, args.model or analyze.DEFAULT_MODEL)
+        backend, reason = analyze.choose_backend(args.backend)
+        if not backend:
+            verdict = {"error": reason}
+        elif backend == "claude-code":
+            print("--llm: sending the evidence dossier (strings, imports, script text; not the file) to Claude "
+                  "through your signed-in Claude Code account")
+            verdict = analyze.llm_verdict_claude_code(dossier, args.model)
+        else:
+            print("--llm: sending the evidence dossier (strings, imports, script text; not the file) to the Claude API")
+            verdict = analyze.llm_verdict(dossier, args.model or analyze.DEFAULT_MODEL)
     out_dir = cfg.reports_dir / f"analyze-{datetime.now():%Y%m%d-%H%M%S}-{dossier['file']['sha256'][:8]}"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "dossier.json").write_text(json.dumps(dossier, indent=1, ensure_ascii=False), "utf-8")
@@ -179,6 +249,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_tools(args)
     if args.cmd == "analyze":
         return _cmd_analyze(args)
+    if args.cmd == "keys":
+        return _cmd_keys(args)
+    if args.cmd == "login":
+        return _cmd_login(args)
     if args.cmd == "modules":
         from .modules import REGISTRY
 
