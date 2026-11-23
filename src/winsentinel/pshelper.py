@@ -67,7 +67,8 @@ def is_admin() -> bool:
 
 _SIG_SCRIPT = r"""
 $paths = [Console]::In.ReadToEnd() | ConvertFrom-Json
-foreach ($p in @($paths)) {
+foreach ($q in @($paths)) {
+  $p = [string]$q
   try {
     $s = Get-AuthenticodeSignature -LiteralPath $p
     $subj = if ($s.SignerCertificate) { $s.SignerCertificate.Subject } else { '' }
