@@ -12,6 +12,7 @@ from ..winutil import HKLM, reg_get
 NAME = "hardening"
 DESCRIPTION = "UAC, BitLocker, firewall, RDP, SMBv1, LSA protection, Secure Boot, local admins, guest, password policy"
 ORDER = 40
+PLATFORMS = ("windows",)
 
 _BITLOCKER = r"""
 $sh = New-Object -ComObject Shell.Application

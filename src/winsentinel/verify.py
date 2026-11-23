@@ -16,7 +16,7 @@ import os
 import re
 
 from .findings import SEV_RANK, Finding, cap, downgrade
-from .pshelper import check_signatures
+from .trust import check_trust
 
 _FIXTURE_RE = re.compile(r"[\\/](tests?|fixtures?|testdata|examples?|samples?|testskills|__tests__|pytest-of-[^\\/]+)[\\/]", re.I)
 STRONG_PREFIXES = ("yara:", "hash:", "defender:", "loldriver:")
@@ -27,7 +27,7 @@ def _has_strong(f: Finding) -> bool:
 
 
 def verify_findings(findings: list[Finding], trusted_signers: list[str],
-                    defender_paths: set[str] | None = None, sigcheck=check_signatures) -> int:
+                    defender_paths: set[str] | None = None, sigcheck=check_trust) -> int:
     """Mutates findings in place. Returns how many were downgraded."""
     targets = [f for f in findings if SEV_RANK[f.severity] <= SEV_RANK["high"]]
     for f in targets:

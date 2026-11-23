@@ -165,7 +165,7 @@ def _command_findings(res: ModuleResult, source: Path, label: str, command: str,
     if _NET_CMD.search(command) and "hook" in label.lower():
         signals.append("hook command uses a network client")
         sev = max(sev, "medium", key=_RANK.index)
-    if in_user_writable(command) and re.search(r"(?i)\\(temp|tmp|downloads)\\", command):
+    if in_user_writable(command) and re.search(r"(?i)[\\/](temp|tmp|downloads)[\\/]", command):
         signals.append("runs a program from a temp/downloads folder")
         sev = max(sev, "medium", key=_RANK.index)
     res.add(rule_id="AI-EXEC-CONFIG", title=f"{label}", severity=sev, evidence=f"{source} :: {key}",
@@ -332,7 +332,14 @@ def run(ctx) -> ModuleResult:
             for proj, pd in (data.get("projects") or {}).items() if isinstance(data.get("projects"), dict) else []:
                 if isinstance(pd, dict):
                     _audit_mcp(res, f, pd.get("mcpServers"), f"projects[{proj}].mcpServers")
-    desktop = Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json"
+    import sys
+
+    if sys.platform == "win32":
+        desktop = Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json"
+    elif sys.platform == "darwin":
+        desktop = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    else:
+        desktop = Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
     data = _load_json(desktop)
     if isinstance(data, dict):
         _audit_mcp(res, desktop, data.get("mcpServers"), "mcpServers")

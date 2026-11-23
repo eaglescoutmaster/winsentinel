@@ -9,6 +9,7 @@ from ..pshelper import PSError, ps_json
 NAME = "defender"
 DESCRIPTION = "Defender status, exclusions, tamper protection, threat history; triggers a quick scan in --full"
 ORDER = 10
+PLATFORMS = ("windows",)
 
 _STATUS = r"""
 $s = Get-MpComputerStatus

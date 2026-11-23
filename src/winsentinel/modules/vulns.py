@@ -342,14 +342,29 @@ def _drivers(ctx, res: ModuleResult) -> None:
 def run(ctx) -> ModuleResult:
     res = ModuleResult(NAME)
     targets = ctx.paths or [d for d in ctx.cfg.code_dirs if d.is_dir()]
+    from ..osinfo import OS
+
     if not ctx.paths:
-        _software(ctx, res)
+        if OS == "windows":
+            _software(ctx, res)
+        else:
+            from .. import posixvulns
+
+            posixvulns.updates(ctx, res)
     seen = _osv(ctx, res, targets)
     if ctx.full:
         _trivy(ctx, res, targets, seen)
     else:
         res.coverage["trivy"] = "skipped in quick mode"
-    if not ctx.paths:
+    if not ctx.paths and OS == "windows":
         _windows_updates(ctx, res)
         _drivers(ctx, res)
+    elif not ctx.paths:
+        from .. import posixvulns
+
+        posixvulns.kernel_extensions(ctx, res)
+        if ctx.full:
+            posixvulns.package_integrity(ctx, res)
+        else:
+            res.coverage["package_integrity"] = "skipped in quick mode"
     return res

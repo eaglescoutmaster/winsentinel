@@ -22,7 +22,9 @@ import pefile
 from .config import HOME, Config
 from .modules.files import _name_signals, analyse_pe, entropy, sniff
 from .modules.iocs import _ASCII, _UTF16, extract_iocs
-from .pshelper import check_signatures
+from .binfmt import analyse_elf, analyse_macho
+from .shellrules import SHELL_RULES
+from .trust import check_trust, trust_label
 from .textrules import SCRIPT_RULES, decode_blobs, read_text, scan_text
 from .toolchain import Toolchain
 from .yaraload import load_own, load_pack
@@ -208,8 +210,13 @@ def build_dossier(path: Path, cfg: Config, tools: Toolchain) -> dict:
         },
         "name_and_location_signals": _name_signals(str(path)),
     }
-    sig = check_signatures([str(path)]).get(str(path), {})
-    d["authenticode"] = sig or {"status": "Unknown"}
+    sig = check_trust([str(path)]).get(str(path), {})
+    d["authenticode"] = sig or {"status": "Unknown"}  # key kept for compatibility; see trust_method
+    d["trust_method"] = trust_label()
+    if kind in ("elf", "macho"):
+        b = analyse_elf(data) if kind == "elf" else analyse_macho(data)
+        b["heuristic_signals"] = b.pop("signals", [])
+        d["binary"] = b
 
     yara_hits = []
     rule_sets = [("built-in", load_own())]
@@ -256,7 +263,7 @@ def build_dossier(path: Path, cfg: Config, tools: Toolchain) -> dict:
     if kind in ("script", "other") and st.st_size <= 4 * 1024 * 1024 and data.count(b"\x00") < len(data) // 20 + 1 \
             or kind == "script":
         text = read_text(data)
-        hits = scan_text(text, SCRIPT_RULES)
+        hits = scan_text(text, SCRIPT_RULES + SHELL_RULES)
         d["script"] = {
             "rule_hits": [{"id": h.rule.id, "severity": h.rule.severity, "category": h.rule.category,
                            "line": h.line, "signal": h.signal} for h in hits[:100]],
@@ -419,7 +426,7 @@ def render_markdown(d: dict, verdict: dict | None) -> str:
            "## File", "",
            f"- Path: `{f['path']}`", f"- Kind: {f['kind']}, {f['size']} bytes, entropy {f['entropy']}",
            f"- Created {f['created']}, modified {f['modified']}", f"- SHA256: `{f['sha256']}`",
-           f"- Authenticode: {sig.get('status')}" + (f" ({sig.get('signer')})" if sig.get("signer") else ""),
+           f"- {d.get('trust_method', 'Authenticode').capitalize()}: {sig.get('status')}" + (f" ({sig.get('signer')})" if sig.get("signer") else ""),
            f"- Name/location signals: {'; '.join(d['name_and_location_signals']) or 'none'}",
            f"- LOLDrivers: {d.get('loldrivers', 'not listed')}", ""]
     if verdict:
@@ -454,6 +461,22 @@ def render_markdown(d: dict, verdict: dict | None) -> str:
         out += [f"| `{s['name']}` | {s['raw_size']} | {s['entropy']} | {'x' if s['executable'] else ''} | "
                 f"{'w' if s['writable'] else ''} |" for s in pe.get("sections", [])]
         out.append("")
+    b = d.get("binary")
+    if b:
+        out += [f"## {b.get('format')}", ""]
+        if b.get("parse_error"):
+            out += [f"- Could not be parsed: {b['parse_error']}", ""]
+        elif b.get("format") == "ELF":
+            out += [f"- {b.get('machine')}, {b.get('type')}, {b.get('bits')}-bit"
+                    + (", stripped" if b.get("stripped") else "") + (", statically linked" if b.get("static") else ""),
+                    f"- Imports: {b.get('import_count')} symbols; libraries: {', '.join(b.get('needed_libraries', [])) or 'none'}"]
+        else:
+            out += [f"- Mach-O{' (universal)' if b.get('universal') else ''}, entropy {b.get('entropy')}; "
+                    f"{b.get('symbol_count')} symbols found by {b.get('method')}",
+                    f"- Embedded code signature: {'yes' if b.get('has_code_signature') else 'no'}"]
+        out += [f"- Heuristic signals: {'; '.join(b.get('heuristic_signals', [])) or 'none'}", "",
+                "Capabilities implied by imports (capability, not behaviour):", "",
+                _bullets(f"{c}: {', '.join(v)}" for c, v in b.get("capabilities_from_imports", {}).items()), ""]
     s = d["strings"]
     out += ["## Strings", "", f"{s['total']} strings, {s['interesting_total']} of interest "
             f"(first {len(s['interesting'])} are in dossier.json).", ""]

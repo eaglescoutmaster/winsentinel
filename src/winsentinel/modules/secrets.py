@@ -295,7 +295,40 @@ def _dotfiles(res: ModuleResult) -> None:
                     pass
 
 
+_RC_ASSIGN = re.compile(r"""(?m)^\s*(?:export\s+|setenv\s+)?([A-Za-z_][A-Za-z0-9_]*)[=\s]\s*["']?([^\s"'#$`]{12,})["']?\s*(?:#.*)?$""")
+
+
+def _posix_environment(res: ModuleResult) -> None:
+    """Secrets exported from shell start-up files: the POSIX equivalent of a persistent environment variable."""
+    home = Path.home()
+    files = [home / n for n in (".bashrc", ".bash_profile", ".profile", ".zshrc", ".zshenv", ".zprofile",
+                                ".pam_environment", ".config/fish/config.fish")] + [Path("/etc/environment")]
+    envd = home / ".config" / "environment.d"
+    if envd.is_dir():
+        files += sorted(envd.glob("*.conf"))
+    for f in files:
+        try:
+            if not f.is_file() or f.stat().st_size > 1_000_000:
+                continue
+            text = f.read_text("utf-8", "replace")
+        except OSError:
+            continue
+        res.coverage["shell_startup_files"] = res.coverage.get("shell_startup_files", 0) + 1
+        for m in _RC_ASSIGN.finditer(text):
+            name, val = m.group(1), m.group(2)
+            if "/" in val[:3] or not _SECRET_NAME.search(name) or _NOT_SECRET_NAME.search(name):
+                continue
+            line = text.count("\n", 0, m.start()) + 1
+            _fact(res, "SECRET-ENV", f"Secret exported from {f.name}: {name}", "medium", f"{f}:{line}",
+                  f"Value {redact(val)} is set for every shell you open and sits in a plain-text file.",
+                  "Remove the line and load the value per session or from a secret store (pass, keychain, 1Password CLI).",
+                  f"{f.name}|{name}", redact(val))
+
+
 def _environment(res: ModuleResult) -> None:
+    if os.name != "nt":
+        _posix_environment(res)
+        return
     sources = [(HKCU, "Environment", "HKCU\\Environment"),
                (HKLM, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment", "HKLM system environment")]
     for root, key, label in sources:

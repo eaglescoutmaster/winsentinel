@@ -19,10 +19,13 @@ from pathlib import Path
 
 import pefile
 
+from ..binfmt import MACHO_MAGIC, analyse_elf, analyse_macho
 from ..findings import ModuleResult
-from ..pshelper import PSError, check_signatures, ps_json
+from ..osinfo import OS, POSIX, is_wsl, posix_temp_like
+from ..shellrules import SHELL_RULES
 from ..state import State
 from ..textrules import SCRIPT_RULES, read_text, scan_text
+from ..trust import check_trust, trust_label
 from ..winutil import in_user_writable
 from ..yaraload import load_own, load_pack
 
@@ -31,7 +34,9 @@ DESCRIPTION = "YARA + hash + PE analysis of files (quick: user hot spots; full: 
 ORDER = 90
 ENGINE_VERSION = "1"
 
-_SCRIPT_EXT = {".ps1", ".psm1", ".bat", ".cmd", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".sct"}
+_SCRIPT_EXT = {".ps1", ".psm1", ".bat", ".cmd", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".sct",
+               ".sh", ".bash", ".zsh", ".command", ".scpt", ".applescript"}
+_BINARY_KINDS = ("pe", "elf", "macho")
 _PE_EXT_OK = {".exe", ".dll", ".sys", ".scr", ".cpl", ".ocx", ".drv", ".efi", ".mui", ".pyd", ".node", ".com", ".ax",
               ".acm", ".tlb", ".winmd", ".xll", ".rll", ".ime", ".tsp", ".vst3", ".aex", ".8bf", ".bin", ".dat",
               ".tmp", ".old", ".bak", ".msi", ".msp", ".olb", ".fon", ".so", ".exe_", ".dll_", ""}
@@ -61,7 +66,11 @@ def sniff(head: bytes, ext: str) -> str | None:
     for magic, kind in _MAGIC:
         if head.startswith(magic):
             return kind
-    if ext in _SCRIPT_EXT:
+    if head[:4] in MACHO_MAGIC:
+        # CAFEBABE is also a Java class file; a universal Mach-O has a small architecture count next.
+        if head[:2] != b"\xca\xfe" or (len(head) >= 8 and int.from_bytes(head[4:8], "big") < 20):
+            return "macho"
+    if ext in _SCRIPT_EXT or head.startswith(b"#!"):
         return "script"
     return None
 
@@ -171,8 +180,16 @@ class Scanner:
             out["has_cert_table"] = pe.get("has_cert_table", False)
             if ext in _DECOY_EXT:
                 out["signals"].append(f"extension mismatch: Windows executable named {ext}")
+        elif kind in ("elf", "macho"):
+            b = analyse_elf(data) if kind == "elf" else analyse_macho(data)
+            out["signals"] += b.get("signals", [])
+            if ext in _DECOY_EXT:
+                out["signals"].append(f"extension mismatch: executable binary named {ext}")
         elif kind == "script" and size <= 2 * 1024 * 1024:
-            hits = scan_text(read_text(data), SCRIPT_RULES)
+            hits = scan_text(read_text(data), SCRIPT_RULES + SHELL_RULES)
+        if POSIX and kind in ("elf", "macho", "script") and os.path.basename(path).startswith(".") and posix_temp_like(path):
+            out["signals"].append("hidden executable in a world-writable temporary directory")
+        if kind == "script" and size <= 2 * 1024 * 1024:
             out["text"] = [{"id": h.rule.id, "sev": h.rule.severity, "cat": h.rule.category, "signal": h.signal,
                             "line": h.line} for h in hits]
         return out
@@ -183,6 +200,10 @@ def _roots(ctx) -> list[Path]:
         return ctx.paths
     if not ctx.full:
         return [p for p in ctx.cfg.quick_paths if p.exists()]
+    if POSIX:
+        return [Path("/")]
+    from ..pshelper import PSError, ps_json
+
     try:
         rows = ps_json('Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID', timeout=30)
         return [Path(r["DeviceID"] + "\\") for r in rows]
@@ -215,13 +236,13 @@ def _walk(roots: list[Path], excludes: list[str], cov: Counter, deadline: float 
                         continue
                     if e.is_dir(follow_symlinks=False):
                         low = e.path.lower()
-                        if e.name.lower() in _ALWAYS_SKIP_DIRS or any(low == x or low.startswith(x + "\\") for x in excludes):
+                        if e.name.lower() in _ALWAYS_SKIP_DIRS or any(low == x or low.startswith(x + os.sep) for x in excludes):
                             cov["excluded_dirs"] += 1
                             continue
                         stack.append(e.path)
                     elif e.is_file(follow_symlinks=False):
                         st = e.stat(follow_symlinks=False)
-                        if st.st_file_attributes & (_FILE_ATTRIBUTE_OFFLINE | _FILE_ATTRIBUTE_RECALL):
+                        if getattr(st, "st_file_attributes", 0) & (_FILE_ATTRIBUTE_OFFLINE | _FILE_ATTRIBUTE_RECALL):
                             cov["cloud_placeholders_skipped"] += 1
                             continue
                         yield e.path, st
@@ -244,9 +265,20 @@ def _name_signals(path: str) -> list[str]:
         out.append("double extension disguises an executable as a document")
     if _RLO in name:
         out.append("right-to-left override character in file name")
-    if name.lower() in _SYSTEM_BINARIES and not path.lower().startswith(_SYSROOT + "\\"):
+    if OS == "windows" and name.lower() in _SYSTEM_BINARIES and not path.lower().startswith(_SYSROOT + "\\"):
         out.append(f"masquerade: Windows system binary name {name} outside {_SYSROOT}")
+    if POSIX and name in _POSIX_DAEMONS and in_user_writable(path):
+        out.append(f"masquerade: system daemon name {name} in a user-writable location")
     return out
+
+
+# Names of system daemons and kernel threads that malware borrows; none belongs under /tmp or a home directory.
+_POSIX_DAEMONS = {"sshd", "systemd", "systemd-journald", "systemd-udevd", "crond", "cron", "kworker", "kthreadd",
+                  "ksoftirqd", "dbus-daemon", "rsyslogd", "agetty", "launchd", "loginwindow", "syslogd", "mds",
+                  "mdworker", "WindowServer", "kernel_task", "trustd", "securityd"}
+# Pseudo and duplicate filesystems that must not be walked in a full scan.
+_POSIX_EXCLUDES = ["/proc", "/sys", "/dev", "/run", "/snap", "/var/lib/docker", "/var/lib/containers",
+                   "/system/volumes", "/private/var/vm", "/private/var/db/uuidtext"]
 
 
 def _severity(r: dict, name_sigs: list[str], path: str) -> tuple[str, list[str], str]:
@@ -295,7 +327,12 @@ def run(ctx) -> ModuleResult:
         res.notes.append("no scan roots exist")
         return res
     res.coverage["roots"] = ", ".join(str(r) for r in roots)
-    excludes = [str(p).lower().rstrip("\\") for p in ctx.cfg.default_excludes()]
+    excludes = [str(p).lower().rstrip("\\/") for p in ctx.cfg.default_excludes()]
+    if POSIX:
+        excludes += _POSIX_EXCLUDES
+        if is_wsl() and not ctx.paths:  # the Windows drives are that machine's job, not this distro's
+            excludes += [f"/mnt/{c}" for c in "abcdefghijklmnopqrstuvwxyz"] + ["/mnt/wsl", "/mnt/wslg"]
+            res.note("WSL: Windows drives under /mnt are not scanned from here (run winsentinel on Windows)", partial=False)
     cov: Counter = Counter()
     deadline = None
     if not ctx.full and not ctx.paths:
@@ -352,8 +389,9 @@ def run(ctx) -> ModuleResult:
         sev, signals, title = _severity(r, _name_signals(path), path)
         if sev != "none":
             cands.append((path, size, r, sev, signals, title))
-    pe_paths = [c[0] for c in cands if c[2].get("kind") == "pe" and os.path.isfile(c[0])]
-    sigs = check_signatures(pe_paths) if pe_paths else {}
+    pe_paths = [c[0] for c in cands if c[2].get("kind") in _BINARY_KINDS and os.path.isfile(c[0])]
+    sigs = check_trust(pe_paths) if pe_paths else {}
+    label = trust_label().lower()
     trusted = {s.lower() for s in ctx.cfg.trusted_signers}
     dropped_signed = 0
     for path, size, r, sev, signals, title in cands:
@@ -367,9 +405,9 @@ def run(ctx) -> ModuleResult:
                 sev = "low"
                 signals.append(f"validly signed by {sig['signer']}")
             elif sig["status"] == "NotSigned":
-                signals.append("authenticode: unsigned")
+                signals.append(f"{label}: unsigned")
             elif sig["status"] in ("HashMismatch", "NotTrusted"):
-                signals.append(f"authenticode: {sig['status']}")
+                signals.append(f"{label}: {sig['status']}")
                 sev = "high"
         res.add(rule_id="FILE-" + (r["yara"][0]["rule"] if r.get("yara") else "HEURISTIC"), title=f"{title}: {os.path.basename(path)}",
                 severity=sev, evidence=path, why="; ".join(signals), confidence=0.8 if strong else 0.5, signals=signals,

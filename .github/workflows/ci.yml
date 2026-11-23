@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [master, posix]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-and-scan:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same script a user runs: installs uv, Python, dependencies and pinned tools, then tests and a quick scan.
+      - name: Bootstrap (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: sh bootstrap.sh
+
+      - name: Bootstrap (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\bootstrap.ps1
+
+      # bootstrap tolerates test failures so a user still gets a report; CI must not.
+      - name: Tests and report check
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run pytest -q
+          uv run python .github/check_report.py
+
+      - name: Deep analysis of a system binary
+        shell: bash
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          if [ "$RUNNER_OS" = "Windows" ]; then target="C:/Windows/System32/notepad.exe"; else target=/bin/ls; fi
+          uv run winsentinel analyze "$target"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports-${{ matrix.os }}
+          path: reports/
+          retention-days: 7

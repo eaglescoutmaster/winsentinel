@@ -5,15 +5,21 @@ import ipaddress
 import os
 import re
 import shutil
-import winreg
 
-HKLM = winreg.HKEY_LOCAL_MACHINE
-HKCU = winreg.HKEY_CURRENT_USER
-_VIEW = {64: winreg.KEY_WOW64_64KEY, 32: winreg.KEY_WOW64_32KEY}
+try:
+    import winreg
+except ImportError:  # not Windows: registry helpers return their defaults, callers stay importable
+    winreg = None
+
+HKLM = winreg.HKEY_LOCAL_MACHINE if winreg else "HKLM"
+HKCU = winreg.HKEY_CURRENT_USER if winreg else "HKCU"
+_VIEW = {64: winreg.KEY_WOW64_64KEY, 32: winreg.KEY_WOW64_32KEY} if winreg else {64: 0, 32: 0}
 ROOT_NAME = {HKLM: "HKLM", HKCU: "HKCU"}
 
 
 def _open(root, path: str, view: int):
+    if winreg is None:
+        raise OSError("no registry on this operating system")
     return winreg.OpenKey(root, path, 0, winreg.KEY_READ | _VIEW[view])
 
 
@@ -127,6 +133,10 @@ _WRITABLE_MARKERS = (
 
 def in_user_writable(path: str) -> bool:
     """Heuristic: location a standard user can normally write to."""
+    if path.startswith("/"):
+        from .osinfo import posix_user_writable
+
+        return posix_user_writable(path)
     p = path.lower().replace("/", "\\")
     return any(m in p for m in _WRITABLE_MARKERS)
 

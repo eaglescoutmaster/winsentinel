@@ -10,7 +10,7 @@ from pathlib import Path
 from . import __version__
 from .config import load_config
 from .findings import SEVERITIES, apply_baseline
-from .pshelper import is_admin
+from .osinfo import OS, is_admin
 from .report import new_report_dir, sort_findings, write_json, write_markdown, write_sarif
 from .runner import Context, run_modules
 from .toolchain import TOOLS, ToolError, Toolchain
@@ -188,6 +188,11 @@ def _cmd_scan(args) -> int:
     names = args.module or list(REGISTRY)
     bad = [n for n in names if n not in REGISTRY]
     if bad:
+        from .modules import UNSUPPORTED
+
+        for n in bad:
+            if n in UNSUPPORTED:
+                print(f"module {n} is not available on {OS} (only on {', '.join(UNSUPPORTED[n])})", file=sys.stderr)
         print(f"unknown module(s): {', '.join(bad)}. Available: {', '.join(REGISTRY)}", file=sys.stderr)
         return 2
     mode = "full" if args.full else "quick"
@@ -208,7 +213,8 @@ def _cmd_scan(args) -> int:
         "paths": [str(p) for p in ctx.paths],
     }
     if not ctx.admin:
-        ctx.log("not elevated: checks that need admin are skipped and listed in the report")
+        ctx.log("not elevated: checks that need " + ("admin" if OS == "windows" else "root")
+                + " are skipped and listed in the report")
     results = run_modules(ctx, names)
     findings = [f for r in results for f in r.findings]
 

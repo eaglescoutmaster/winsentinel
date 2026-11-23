@@ -13,6 +13,7 @@ from ..winutil import HKCU, in_user_writable, is_public_ip, is_script_host, reg_
 NAME = "processes"
 DESCRIPTION = "Unsigned/masquerading processes, listening ports, outbound connections, hosts file, DNS, proxy"
 ORDER = 30
+PLATFORMS = ("windows",)
 
 _PROCS = "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine"
 _TCP = ("Get-NetTCPConnection -State Listen,Established -ErrorAction SilentlyContinue | "

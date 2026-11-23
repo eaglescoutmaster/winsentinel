@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -45,6 +46,7 @@ def test_entropy_bounds():
     assert files.entropy(bytes(range(256)) * 16) == pytest.approx(8.0)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only behaviour")
 def test_name_tricks():
     assert any("double extension" in s for s in files._name_signals(r"C:\Users\x\Downloads\invoice.pdf.exe"))
     assert any("masquerade" in s for s in files._name_signals(r"C:\Users\x\AppData\Local\Temp\svchost.exe"))
@@ -64,6 +66,7 @@ def test_single_weak_pe_trait_is_not_reported():
     assert files._severity(r, [], r"C:\Program Files\Tool\tool.exe")[0] == "none"
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only behaviour")
 def test_analyse_pe_on_real_system_binary():
     data = Path(r"C:\Windows\System32\notepad.exe").read_bytes()
     info = files.analyse_pe(data)
@@ -82,6 +85,7 @@ def test_tolerant_compile_drops_only_unsupported_rules():
     assert [m.rule for m in rules.match(data=b"xx winsentinel-marker xx")] == ["ok_rule"]
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only behaviour")
 def test_end_to_end_scan_of_planted_fixtures(ctx, tmp_path, monkeypatch):
     """Plant a persistence-style script and a renamed (Microsoft-signed) executable; scan only that folder."""
     target = tmp_path / "planted"

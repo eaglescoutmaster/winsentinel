@@ -16,6 +16,7 @@ from ..winutil import (HKCU, HKLM, ROOT_NAME, exe_from_command, in_user_writable
 NAME = "persistence"
 DESCRIPTION = "Run keys, tasks, services, startup folders, WMI subscriptions, IFEO, AppInit, Winlogon, LSA, browser extensions, PS profiles"
 ORDER = 20
+PLATFORMS = ("windows",)
 
 _CV = r"Software\Microsoft\Windows\CurrentVersion"
 _RUN_KEYS = [f"{_CV}\\Run", f"{_CV}\\RunOnce", f"{_CV}\\RunServices", f"{_CV}\\Policies\\Explorer\\Run"]

@@ -22,6 +22,27 @@ def _env(name: str, default: str = "") -> Path:
     return Path(os.environ.get(name, default))
 
 
+def default_quick_paths() -> list[Path]:
+    """Hot spots the quick file scan covers: where downloads land and where things start from."""
+    import sys
+
+    if sys.platform == "win32":
+        return [
+            HOME / "Downloads",
+            HOME / "Desktop",
+            _env("TEMP", str(HOME / "AppData/Local/Temp")),
+            _env("APPDATA", str(HOME / "AppData/Roaming")) / "Microsoft/Windows/Start Menu/Programs/Startup",
+            _env("PROGRAMDATA", "C:/ProgramData") / "Microsoft/Windows/Start Menu/Programs/Startup",
+            _env("PUBLIC", "C:/Users/Public"),
+        ]
+    common = [HOME / "Downloads", HOME / "Desktop", Path("/tmp"), Path("/var/tmp")]
+    if sys.platform == "darwin":
+        return common + [HOME / "Library/LaunchAgents", Path("/Library/LaunchAgents"), Path("/Library/LaunchDaemons"),
+                         Path("/Users/Shared"), HOME / "Library/Application Support/com.apple.backgroundtaskmanagementagent"]
+    return common + [Path("/dev/shm"), HOME / ".config/autostart", HOME / ".local/bin", Path("/usr/local/bin"),
+                     Path("/etc/cron.d"), Path("/etc/cron.daily"), Path("/etc/cron.hourly")]
+
+
 def discover_code_dirs(limit: int = 12) -> list[Path]:
     """Default code directories: the most recently modified git repositories directly under the
     usual project folders. Override with code_dirs in winsentinel.toml."""
@@ -52,16 +73,7 @@ class Config:
     # files module
     exclude_paths: list[Path] = field(default_factory=list)
     max_file_mb: int = 64
-    quick_paths: list[Path] = field(
-        default_factory=lambda: [
-            HOME / "Downloads",
-            HOME / "Desktop",
-            _env("TEMP", str(HOME / "AppData/Local/Temp")),
-            _env("APPDATA", str(HOME / "AppData/Roaming")) / "Microsoft/Windows/Start Menu/Programs/Startup",
-            _env("PROGRAMDATA", "C:/ProgramData") / "Microsoft/Windows/Start Menu/Programs/Startup",
-            _env("PUBLIC", "C:/Users/Public"),
-        ]
-    )
+    quick_paths: list[Path] = field(default_factory=lambda: default_quick_paths())
     quick_files_budget_s: int = 180
     threads: int = field(default_factory=lambda: min(16, os.cpu_count() or 4))
     # ai-tooling module

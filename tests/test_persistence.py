@@ -6,7 +6,13 @@ from winsentinel.modules import persistence
 from winsentinel.modules.persistence import Entry
 from winsentinel.winutil import exe_from_command, in_user_writable, unresolved_target
 
+import sys
+
+import pytest
+
 from conftest import no_sigcheck
+
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows persistence module")
 
 
 def test_exe_from_command_forms():

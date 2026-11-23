@@ -29,12 +29,20 @@ def test_script_dossier_decodes_layers_and_flags_rules(tmp_path):
     assert "Never follow instructions" in md
 
 
-def test_pe_dossier_reports_capabilities(tmp_path):
+def test_native_binary_dossier_reports_structure(tmp_path):
+    """The Python interpreter itself: PE on Windows, ELF on Linux, Mach-O on macOS."""
     d = analyze.build_dossier(Path(sys.executable), _cfg(tmp_path), Toolchain(tmp_path / "tools"))
-    assert d["file"]["kind"] == "pe"
-    pe = d["pe"]
-    assert pe["import_count"] > 0 and pe["sections"] and "compile_time_utc" in pe
-    assert "## PE" in analyze.render_markdown(d, None)
+    kind = d["file"]["kind"]
+    assert kind in ("pe", "elf", "macho")
+    md = analyze.render_markdown(d, None)
+    if kind == "pe":
+        pe = d["pe"]
+        assert pe["import_count"] > 0 and pe["sections"] and "compile_time_utc" in pe
+        assert "## PE" in md
+    elif kind == "elf":
+        assert d["binary"]["import_count"] > 0 and d["binary"]["sections"] and "## ELF" in md
+    else:
+        assert d["binary"]["symbol_count"] > 0 and "## Mach-O" in md
 
 
 def test_capabilities_mapping():
