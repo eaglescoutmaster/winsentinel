@@ -107,3 +107,4 @@ def test_end_to_end_scan_of_planted_fixtures(ctx, tmp_path, monkeypatch):
     res2 = files.run(ctx)
     assert res2.coverage["from_cache"] >= 2
     assert {Path(f.evidence).name for f in res2.findings} == set(by_name)
+    shutil.rmtree(target)  # do not leave planted fixtures in %TEMP% for the next real scan to find

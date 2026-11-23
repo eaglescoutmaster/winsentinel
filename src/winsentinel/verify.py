@@ -18,7 +18,7 @@ import re
 from .findings import SEV_RANK, Finding, cap, downgrade
 from .pshelper import check_signatures
 
-_FIXTURE_RE = re.compile(r"[\\/](tests?|fixtures?|testdata|examples?|samples?|testskills|__tests__)[\\/]", re.I)
+_FIXTURE_RE = re.compile(r"[\\/](tests?|fixtures?|testdata|examples?|samples?|testskills|__tests__|pytest-of-[^\\/]+)[\\/]", re.I)
 STRONG_PREFIXES = ("yara:", "hash:", "defender:", "loldriver:")
 
 

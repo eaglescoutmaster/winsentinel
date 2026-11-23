@@ -50,6 +50,7 @@ def test_fake_startup_script_content_is_scanned(monkeypatch, tmp_path):
     f = res.findings[0]
     assert f.severity == "high" and any("RANSOM" in s for s in f.signals)
     assert f.details["path"] == str(script)
+    script.unlink()  # do not leave the planted fixture in %TEMP%
 
 
 def test_trusted_signed_entry_is_not_listed(monkeypatch):
