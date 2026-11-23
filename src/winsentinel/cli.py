@@ -80,7 +80,7 @@ def _cmd_scan(args) -> int:
     ctx = Context(
         cfg=cfg, mode=mode, admin=is_admin(), tools=Toolchain(cfg.tools_dir), report_dir=report_dir,
         paths=[p.resolve() for p in (args.path or [])], vt=args.vt,
-        defender_scan=args.defender_scan or mode == "full",
+        defender_scan=args.defender_scan or mode == "full", explicit=set(args.module or []),
     )
     meta = {
         "started": datetime.now().isoformat(timespec="seconds"),

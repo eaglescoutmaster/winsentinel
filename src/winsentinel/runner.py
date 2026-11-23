@@ -22,6 +22,7 @@ class Context:
     paths: list[Path] = field(default_factory=list)  # --path overrides
     vt: bool = False
     defender_scan: bool = False
+    explicit: set[str] = field(default_factory=set)  # modules named with --module
     results: dict[str, ModuleResult] = field(default_factory=dict)
 
     @property
