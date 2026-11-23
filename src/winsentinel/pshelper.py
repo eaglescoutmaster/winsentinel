@@ -101,8 +101,12 @@ def check_signatures(paths: list[str], chunk: int = 200) -> dict[str, dict]:
         except PSError:
             rows = []
         for r in rows:
+            status = r.get("status", "Unknown")
+            # Store (MSIX) apps are signed at package level; per-file Authenticode says NotSigned.
+            if status == "NotSigned" and "\program files\windowsapps\\" in r["path"].lower():
+                status = "PackageSigned"
             result[r["path"]] = {
-                "status": r.get("status", "Unknown"),
+                "status": status,
                 "signer": signer_name(r.get("subject") or ""),
                 "os_binary": bool(r.get("catalog")),
             }

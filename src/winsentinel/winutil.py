@@ -4,6 +4,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import re
+import shutil
 import winreg
 
 HKLM = winreg.HKEY_LOCAL_MACHINE
@@ -82,6 +83,10 @@ def _resolve(candidate: str) -> str | None:
                 p = os.path.join(d, t)
                 if os.path.isfile(p):
                     return os.path.normpath(p)
+            if "\\" not in t and "/" not in t:
+                w = shutil.which(t)
+                if w:
+                    return os.path.normpath(w)
     return None
 
 
