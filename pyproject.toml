@@ -1,6 +1,6 @@
 [project]
 name = "winsentinel"
-version = "0.1.1"
+version = "0.2.0"
 description = "Defensive, read-only security scanner for Windows"
 readme = "README.md"
 authors = [

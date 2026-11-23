@@ -22,9 +22,9 @@ STEP 1: get the code (skip the download if %USERPROFILE%\winsentinel\bootstrap.p
   $dst = "$env:USERPROFILE\winsentinel"
   $tmp = Join-Path $env:TEMP ("ws-" + [guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Force $tmp | Out-Null
-  Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/eaglescoutmaster/winsentinel/archive/refs/tags/v0.1.1.zip' -OutFile "$tmp\ws.zip"
+  Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/eaglescoutmaster/winsentinel/archive/refs/tags/v0.2.0.zip' -OutFile "$tmp\ws.zip"
   Expand-Archive -LiteralPath "$tmp\ws.zip" -DestinationPath $tmp -Force
-  Move-Item -LiteralPath "$tmp\winsentinel-0.1.1" -Destination $dst
+  Move-Item -LiteralPath "$tmp\winsentinel-0.2.0" -Destination $dst
   Remove-Item -LiteralPath $tmp -Recurse -Force
 
   If $dst exists but has no bootstrap.ps1, stop and tell me rather than overwriting it.
