@@ -127,6 +127,18 @@ with `--module` or `--path` use a separate baseline so they cannot hide findings
 | `files` | YARA (built-in + YARA Forge core), SHA256, PE traits, disguised executables, known-vulnerable drivers | yara-python, pefile | Downloads, Desktop, Temp, Startup, Public (3-minute budget) | all fixed drives | protected directories |
 | `iocs` | Indicators from files flagged above | built-in; VirusTotal with `--vt` | yes | | |
 
+### GUI
+
+```sh
+uv run winsentinel gui
+```
+
+Opens a local page in your browser: findings by severity with filters and details, what each module covered,
+a button to start a quick or full scan, single-file analysis, and tool and key status. It runs the same
+`scan` and `analyze` commands as the CLI and is just as read-only. It listens on `127.0.0.1` only, on a random
+port, and the printed link carries a one-time token; nothing is reachable from the network. Keys are still set
+from the terminal so they never pass through the browser. Stop it with Ctrl+C.
+
 ### Linux and macOS
 
 The same commands and report format. `secrets`, `code`, `ai-tooling`, `iocs` and `analyze` work as on Windows.

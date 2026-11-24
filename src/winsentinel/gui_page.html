@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>winsentinel</title>
+<style nonce="__NONCE__">
+:root{--bg:#f5f6f8;--panel:#fff;--line:#dfe3e8;--text:#17202a;--dim:#5d6b7a;--accent:#1f6feb;--accent-text:#fff;
+--critical:#b3123a;--high:#c9420a;--medium:#a06a00;--low:#2b6ca3;--info:#66727f;--ok:#1b7f4b;--code:#eef1f4}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--panel:#171c23;--line:#2a323c;--text:#e4e8ed;--dim:#94a1b0;
+--accent:#4c8dff;--accent-text:#0b0e12;--critical:#ff5c85;--high:#ff8a4c;--medium:#e6b23c;--low:#6fb1ea;--info:#8b97a5;--ok:#4cc38a;--code:#10151b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;letter-spacing:.2px}
+header .meta{color:var(--dim);font-size:12px}
+nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+button,select,input[type=text]{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600}
+button.tab[aria-selected=true]{border-color:var(--accent);color:var(--accent);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+main{max-width:1180px;margin:0 auto;padding:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.panel h2{font-size:14px;margin:0 0 10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grow{flex:1 1 220px;min-width:0}
+.dim{color:var(--dim)}
+.small{font-size:12px}
+.banner{border-left:4px solid var(--medium);padding:8px 12px;background:var(--panel);border-radius:4px;margin-bottom:14px;font-size:13px}
+.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:10px;text-align:left;background:var(--panel)}
+.tile .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;display:block}
+.tile .l{font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+.tile[aria-pressed=true]{border-color:currentColor;box-shadow:inset 0 0 0 1px currentColor}
+.sev-critical{color:var(--critical)}.sev-high{color:var(--high)}.sev-medium{color:var(--medium)}.sev-low{color:var(--low)}.sev-info{color:var(--info)}
+.badge{display:inline-block;min-width:66px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border:1px solid currentColor;border-radius:4px;padding:1px 6px}
+.tag{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--dim)}
+.tag.new{color:var(--ok);border-color:var(--ok)}
+.finding{border-top:1px solid var(--line)}
+.finding>button{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;border:0;border-radius:0;background:none;padding:9px 4px}
+.finding>button:hover{background:var(--code)}
+.finding .title{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.finding .body{padding:4px 4px 14px 86px}
+.kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:4px 12px;margin:0}
+.kv dt{color:var(--dim)}
+.kv dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
+code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12.5px}
+pre{background:var(--code);border:1px solid var(--line);border-radius:6px;padding:10px;margin:0;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:6px 8px;border-top:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+th{font-size:12px;color:var(--dim);font-weight:600;border-top:0}
+.scroll{overflow-x:auto}
+.st-ok{color:var(--ok)}.st-partial{color:var(--medium)}.st-skipped{color:var(--dim)}.st-error{color:var(--critical)}
+label.chk{display:inline-flex;gap:6px;align-items:center;margin-right:12px}
+.hidden{display:none}
+.mt{margin-top:14px}.mb{margin-bottom:10px}.mt0{margin-top:0}.mb0{margin-bottom:0}
+.list button{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line);border-radius:0;background:none;padding:8px 4px}
+.list button:hover{background:var(--code)}
+@media (max-width:640px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.finding .body{padding-left:4px}.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>winsentinel</h1>
+  <span class="meta" id="hostmeta"></span>
+  <nav>
+    <button class="tab" data-tab="findings" aria-selected="true">Findings</button>
+    <button class="tab" data-tab="coverage">Coverage</button>
+    <button class="tab" data-tab="scan">Scan</button>
+    <button class="tab" data-tab="analyze">Analyze file</button>
+    <button class="tab" data-tab="setup">Setup</button>
+  </nav>
+</header>
+<main>
+  <div class="banner">Read-only. This reports; it never deletes, quarantines or changes settings. Not a replacement for antivirus or EDR.</div>
+
+  <section id="tab-findings">
+    <div class="panel">
+      <div class="row">
+        <label for="report">Report</label>
+        <select id="report" class="grow"></select>
+        <span class="dim small" id="reportmeta"></span>
+      </div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="panel mt">
+      <div class="row mb">
+        <input type="text" id="search" class="grow" placeholder="Filter by text, path or rule" aria-label="Filter findings">
+        <select id="module" aria-label="Module"></select>
+        <label class="chk"><input type="checkbox" id="newonly"> New since baseline</label>
+        <span class="dim small" id="count"></span>
+      </div>
+      <div id="findings"></div>
+    </div>
+  </section>
+
+  <section id="tab-coverage" class="hidden">
+    <div class="panel"><h2>What each module covered</h2><div class="scroll"><table id="coverage"></table></div></div>
+  </section>
+
+  <section id="tab-scan" class="hidden">
+    <div class="panel">
+      <h2>Run a scan</h2>
+      <div class="row mb">
+        <label class="chk"><input type="radio" name="mode" value="quick" checked> Quick (about 5 minutes)</label>
+        <label class="chk"><input type="radio" name="mode" value="full"> Full (all drives, git history, code analysis; can take hours)</label>
+      </div>
+      <div id="modules" class="mb"></div>
+      <div class="row">
+        <button class="primary" id="runscan">Start scan</button>
+        <button id="stop" disabled>Stop</button>
+        <span class="dim small" id="adminnote"></span>
+      </div>
+    </div>
+    <div class="panel"><h2 id="jobtitle">Output</h2><pre id="joblog" class="dim">No scan started from this page yet.</pre></div>
+  </section>
+
+  <section id="tab-analyze" class="hidden">
+    <div class="panel">
+      <h2>Deep static analysis of one file</h2>
+      <p class="dim small mt0">The file is read, never run. Paste its full path.</p>
+      <div class="row">
+        <input type="text" id="apath" class="grow mono" placeholder="Full path to a file" aria-label="File path">
+        <button class="primary" id="runanalyze">Analyze</button>
+      </div>
+      <p class="mb0"><label class="chk"><input type="checkbox" id="allm"> Ask Claude about intent</label>
+      <span class="dim small">Sends the evidence summary (hashes, imports, strings; not the file) to Claude. Needs a sign-in or API key.</span></p>
+      <pre id="alog" class="hidden mt"></pre>
+    </div>
+    <div class="panel hidden" id="aresult"><h2 id="atitle"></h2><pre id="amd"></pre></div>
+    <div class="panel"><h2>Earlier analyses</h2><div class="list" id="alist"></div></div>
+  </section>
+
+  <section id="tab-setup" class="hidden">
+    <div class="panel"><h2>External tools</h2><pre id="tools">Loading…</pre></div>
+    <div class="panel"><h2>Keys and sign-in</h2><pre id="keys">Loading…</pre>
+      <p class="dim small mb0">Keys are set from a terminal so they never pass through the browser:
+      <code>uv run winsentinel login</code>, <code>uv run winsentinel keys set anthropic</code>, <code>uv run winsentinel keys set virustotal</code>.</p></div>
+    <div class="panel"><h2>Reports folder</h2><code id="rdir"></code></div>
+  </section>
+</main>
+
+<script nonce="__NONCE__">
+"use strict";
+const TOKEN = "__TOKEN__";
+const SEVS = ["critical", "high", "medium", "low", "info"];
+const $ = (id) => document.getElementById(id);
+let state = null, report = null, sevFilter = new Set(), openKeys = new Set(), poll = null, lastKind = null;
+
+// Everything from reports is untrusted (file names, strings from scanned files): text nodes only, never HTML.
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+async function api(path, body) {
+  const opt = { headers: { "X-WS-Token": TOKEN } };
+  if (body !== undefined) { opt.method = "POST"; opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((data && data.error) || ("HTTP " + r.status));
+  return data;
+}
+function show(tab) {
+  for (const b of document.querySelectorAll("button.tab")) b.setAttribute("aria-selected", b.dataset.tab === tab ? "true" : "false");
+  for (const s of document.querySelectorAll("main > section")) s.classList.toggle("hidden", s.id !== "tab-" + tab);
+  if (tab === "setup") loadSetup();
+}
+function total(c) { return SEVS.reduce((n, s) => n + (c[s] || 0), 0); }
+
+async function refresh(selectId) {
+  state = await api("/api/state");
+  $("hostmeta").textContent = `v${state.version} · ${state.os} · ${state.admin ? "elevated" : "not elevated"}`;
+  $("adminnote").textContent = state.admin ? "" : "Not elevated: some checks are skipped and listed under Coverage.";
+  $("rdir").textContent = state.reports_dir;
+  const sel = $("report"), keep = selectId || sel.value;
+  sel.replaceChildren(...state.reports.map((r) => el("option", { value: r.id,
+    text: `${r.started.replace("T", " ")} · ${r.mode} · ${total(r.counts)} findings (${r.counts.critical + r.counts.high} high or critical)` })));
+  if (!state.reports.length) sel.append(el("option", { value: "", text: "No reports yet: run a scan" }));
+  if (keep && state.reports.some((r) => r.id === keep)) sel.value = keep;
+  if (!$("modules").childElementCount) $("modules").append(...state.modules.map((m) =>
+    el("label", { class: "chk", title: m.description }, el("input", { type: "checkbox", value: m.name, checked: "" }), m.name)));
+  $("alist").replaceChildren(...(state.analyses.length ? state.analyses.map((a) => el("button", { onclick: () => openAnalysis(a.id) },
+    el("span", { text: a.name || a.id }), " ", el("span", { class: "tag", text: a.kind || "file" }), " ",
+    a.verdict ? el("span", { class: "tag", text: `${a.verdict.verdict} ${Math.round((a.verdict.confidence || 0) * 100)}%` }) : null,
+    el("div", { class: "dim small mono", text: a.path }))) : [el("p", { class: "dim", text: "None yet." })]));
+  await loadReport();
+  if (state.job && state.job.running) watch();
+  else if (state.job) drawJob(state.job);
+}
+
+async function loadReport() {
+  const id = $("report").value;
+  report = id ? await api("/api/report?id=" + encodeURIComponent(id)) : null;
+  const mods = report ? [...new Set(report.findings.map((f) => f.module))].sort() : [];
+  $("module").replaceChildren(el("option", { value: "", text: "All modules" }), ...mods.map((m) => el("option", { value: m, text: m })));
+  const m = report ? report.meta : null;
+  $("reportmeta").textContent = m ? `${m.host || ""} · ${m.os || ""}${m.admin ? "" : " · not elevated"}` : "";
+  openKeys = new Set();
+  draw();
+}
+
+function draw() {
+  const all = report ? report.findings : [];
+  const counts = Object.fromEntries(SEVS.map((s) => [s, 0]));
+  for (const f of all) if (f.severity in counts) counts[f.severity]++;
+  $("tiles").replaceChildren(...SEVS.map((s) => el("button", { class: "tile sev-" + s, "aria-pressed": sevFilter.has(s) ? "true" : "false",
+    onclick: () => { sevFilter.has(s) ? sevFilter.delete(s) : sevFilter.add(s); draw(); } },
+    el("span", { class: "n", text: String(counts[s]) }), el("span", { class: "l", text: s }))));
+  const q = $("search").value.trim().toLowerCase(), mod = $("module").value, newOnly = $("newonly").checked;
+  const rows = all.filter((f) => (!sevFilter.size || sevFilter.has(f.severity)) && (!mod || f.module === mod) &&
+    (!newOnly || f.status === "new") &&
+    (!q || [f.title, f.evidence, f.rule_id, f.why, f.module].join("\n").toLowerCase().includes(q)));
+  $("count").textContent = report ? `${rows.length} of ${all.length}` : "";
+  const box = $("findings");
+  if (!report) return box.replaceChildren(el("p", { class: "dim", text: "No report yet. Open the Scan tab to run one." }));
+  if (!rows.length) return box.replaceChildren(el("p", { class: "dim", text: all.length ? "Nothing matches these filters." : "This scan reported no findings." }));
+  box.replaceChildren(...rows.slice(0, 500).map(row));
+  if (rows.length > 500) box.append(el("p", { class: "dim small", text: `Showing the first 500. Narrow the filter to see the rest.` }));
+}
+
+function row(f) {
+  const key = f.fingerprint || f.title + f.evidence;
+  const body = el("div", { class: "body" + (openKeys.has(key) ? "" : " hidden") });
+  const fill = () => {
+    if (body.childElementCount) return;
+    const dl = el("dl", { class: "kv" });
+    const add = (k, v, mono) => { if (v != null && v !== "" && !(Array.isArray(v) && !v.length)) dl.append(el("dt", { text: k }), el("dd", { class: mono ? "mono" : "", text: Array.isArray(v) ? v.join("\n") : String(v) })); };
+    add("Where", f.evidence, true); add("Why", f.why); add("Suggested fix", f.remediation);
+    add("Signals", f.signals); add("Rule", f.rule_id, true); add("Kind", f.kind);
+    add("Confidence", f.confidence); add("Verification", f.verification);
+    const d = f.details || {};
+    for (const k of Object.keys(d)) if (k !== "key") add(k, typeof d[k] === "object" ? JSON.stringify(d[k]) : d[k], true);
+    body.append(dl);
+    const p = d.path;
+    if (typeof p === "string" && p) body.append(el("p", { class: "mt mb0" },
+      el("button", { text: "Analyze this file", onclick: () => { $("apath").value = p; show("analyze"); $("apath").focus(); } })));
+  };
+  if (openKeys.has(key)) fill();
+  const head = el("button", { "aria-expanded": openKeys.has(key) ? "true" : "false", onclick: () => {
+      fill(); const open = body.classList.toggle("hidden") === false;
+      open ? openKeys.add(key) : openKeys.delete(key); head.setAttribute("aria-expanded", open ? "true" : "false"); } },
+    el("span", { class: "badge sev-" + f.severity, text: f.severity }),
+    el("span", { class: "title" }, el("span", { text: f.title }), el("div", { class: "dim small mono", text: f.evidence })),
+    f.status === "new" ? el("span", { class: "tag new", text: "new" }) : null,
+    el("span", { class: "tag", text: f.module }));
+  return el("div", { class: "finding" }, head, body);
+}
+
+function drawCoverage() {
+  const t = $("coverage");
+  if (!report) return t.replaceChildren(el("tr", {}, el("td", { class: "dim", text: "No report loaded." })));
+  t.replaceChildren(el("tr", {}, ...["Module", "Status", "Findings", "Seconds", "Coverage", "Notes"].map((h) => el("th", { text: h }))),
+    ...report.modules.map((m) => el("tr", {}, el("td", { class: "mono", text: m.name }), el("td", { class: "st-" + m.status, text: m.status }),
+      el("td", { text: String(m.findings) }), el("td", { text: String(m.duration_s) }),
+      el("td", { class: "small" }, ...Object.entries(m.coverage || {}).map(([k, v]) => el("div", { text: `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}` }))),
+      el("td", { class: "small" }, ...(m.notes || []).map((n) => el("div", { text: n }))))));
+  const nr = (report.meta.not_run || []);
+  if (nr.length) t.append(el("tr", {}, el("td", { colspan: "6", class: "dim", text: "Not run: " + nr.join(", ") })));
+}
+
+function drawJob(j) {
+  if (!j) return;
+  lastKind = j.kind;
+  const status = j.running ? "running…" : (j.rc === 0 ? "finished" : `stopped (exit ${j.rc})`);
+  const text = j.log.join("\n") || "(no output yet)";
+  if (j.kind === "scan") {
+    $("jobtitle").textContent = `Output: ${j.command} · ${status}`;
+    const pre = $("joblog"); pre.classList.remove("dim"); pre.textContent = text; pre.scrollTop = pre.scrollHeight;
+  } else {
+    const pre = $("alog"); pre.classList.remove("hidden"); pre.textContent = `${j.command} · ${status}\n${text}`; pre.scrollTop = pre.scrollHeight;
+  }
+  $("runscan").disabled = $("runanalyze").disabled = j.running;
+  $("stop").disabled = !j.running;
+}
+function watch() {
+  if (poll) return;
+  poll = setInterval(async () => {
+    let j; try { j = await api("/api/job"); } catch (e) { return; }
+    drawJob(j);
+    if (j && !j.running) {
+      clearInterval(poll); poll = null;
+      const before = new Set(state.analyses.map((a) => a.id));
+      await refresh(j.kind === "scan" && j.rc === 0 ? "" : undefined);
+      if (j.kind === "scan" && j.rc === 0 && state.reports.length) { $("report").value = state.reports[0].id; await loadReport(); show("findings"); }
+      if (j.kind === "analyze" && j.rc === 0) { const fresh = state.analyses.find((a) => !before.has(a.id)); if (fresh) openAnalysis(fresh.id); }
+    }
+  }, 1200);
+}
+async function start(path, body, logId) {
+  try { drawJob(await api(path, body)); watch(); }
+  catch (e) { const pre = $(logId); pre.classList.remove("hidden", "dim"); pre.textContent = e.message; }
+}
+async function openAnalysis(id) {
+  const a = await api("/api/analysis?id=" + encodeURIComponent(id));
+  const v = a.verdict && a.verdict.verdict ? ` · Claude: ${a.verdict.verdict} (${Math.round((a.verdict.confidence || 0) * 100)}%)` : "";
+  $("atitle").textContent = id + v; $("amd").textContent = a.markdown;
+  $("aresult").classList.remove("hidden"); show("analyze"); $("aresult").scrollIntoView({ block: "start" });
+}
+async function loadSetup() {
+  try { const s = await api("/api/setup"); $("tools").textContent = s.tools || "(no output)"; $("keys").textContent = s.keys || "(no output)"; }
+  catch (e) { $("tools").textContent = e.message; }
+}
+
+for (const b of document.querySelectorAll("button.tab")) b.addEventListener("click", () => { show(b.dataset.tab); if (b.dataset.tab === "coverage") drawCoverage(); });
+$("report").addEventListener("change", loadReport);
+$("search").addEventListener("input", draw);
+$("module").addEventListener("change", draw);
+$("newonly").addEventListener("change", draw);
+$("runscan").addEventListener("click", () => start("/api/scan", {
+  mode: document.querySelector("input[name=mode]:checked").value,
+  modules: [...document.querySelectorAll("#modules input:checked")].map((i) => i.value) }, "joblog"));
+$("stop").addEventListener("click", () => api("/api/stop", {}).catch(() => {}));
+$("runanalyze").addEventListener("click", () => start("/api/analyze", { path: $("apath").value, llm: $("allm").checked }, "alog"));
+$("apath").addEventListener("keydown", (e) => { if (e.key === "Enter") $("runanalyze").click(); });
+refresh().catch((e) => { $("findings").replaceChildren(el("p", { class: "dim", text: "Could not load: " + e.message })); });
+</script>
+</body>
+</html>

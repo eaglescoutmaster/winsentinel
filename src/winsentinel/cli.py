@@ -58,6 +58,11 @@ def _parser() -> argparse.ArgumentParser:
     lg.add_argument("--console", action="store_true", help="sign in to the API Console instead of a subscription")
 
     sub.add_parser("modules", help="list modules")
+
+    gu = sub.add_parser("gui", help="open the local web interface (127.0.0.1 only)")
+    gu.add_argument("--port", type=int, default=0, help="port to listen on (default: a free one)")
+    gu.add_argument("--no-browser", action="store_true", help="print the link instead of opening a browser")
+    gu.add_argument("--config", type=Path)
     return p
 
 
@@ -259,6 +264,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_keys(args)
     if args.cmd == "login":
         return _cmd_login(args)
+    if args.cmd == "gui":
+        from .gui import serve
+
+        return serve(load_config(args.config), args.config, port=args.port, open_browser=not args.no_browser)
     if args.cmd == "modules":
         from .modules import REGISTRY
 
